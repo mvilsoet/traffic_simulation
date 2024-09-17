@@ -1,6 +1,6 @@
 {
   "aws": {
-    "region": "us-west-2"
+    "region": "us-east-1"
   },
   "sqs": {
     "queue_vehicle_updates": "vehicle-updates-queue",
