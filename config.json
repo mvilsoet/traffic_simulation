@@ -1,0 +1,29 @@
+{
+  "aws": {
+    "region": "us-west-2"
+  },
+  "sqs": {
+    "queue_vehicle_updates": "vehicle-updates-queue",
+    "queue_traffic_updates": "traffic-updates-queue"
+  },
+  "simulation": {
+    "step": 1,
+    "duration": 3600
+  },
+  "roads": {
+    "length": 1000,
+    "initial_road": "R1"
+  },
+  "vehicles": {
+    "acceleration": 5,
+    "initial_count": 10
+  },
+  "traffic_light": {
+    "default_cycle": 60,
+    "initial_intersection": "INT1"
+  },
+  "road_blockage": {
+    "default_duration": 300,
+    "initial_blocked_road": "R2"
+  }
+}
