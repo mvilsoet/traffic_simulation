@@ -1,15 +1,4 @@
 {
-  "aws": {
-    "region": "us-east-1"
-  },
-  "sqs": {
-    "queue_vehicle_updates": "vehicle-updates-queue",
-    "queue_traffic_updates": "traffic-updates-queue"
-  },
-  "simulation": {
-    "step": 1,
-    "duration": 3600
-  },
   "roads": {
     "length": 1000,
     "initial_road": "R1"
@@ -18,12 +7,27 @@
     "acceleration": 5,
     "initial_count": 10
   },
+  "simulation": {
+    "step": 0.1,
+    "duration": 3600
+  },
   "traffic_light": {
-    "default_cycle": 60,
-    "initial_intersection": "INT1"
+    "default_cycle": 30,
+    "initial_intersection": "I1"
   },
   "road_blockage": {
     "default_duration": 300,
     "initial_blocked_road": "R2"
+  },
+  "aws": {
+    "region": "us-west-1"
+  },
+  "sqs": {
+    "queue_vehicle_updates": "vehicle_updates",
+    "queue_traffic_updates": "traffic_updates"
+  },
+  "visualization": {
+    "grid_width": 50,
+    "grid_height": 20
   }
 }
