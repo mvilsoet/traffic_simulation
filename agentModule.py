@@ -13,6 +13,7 @@ INITIAL_VEHICLES = CONFIG['vehicles']['initial_count']
 INITIAL_ROAD = CONFIG['roads']['initial_road']
 SQS_QUEUE_VEHICLE_UPDATES = CONFIG['sqs']['queue_vehicle_updates']
 SQS_QUEUE_TRAFFIC_UPDATES = CONFIG['sqs']['queue_traffic_updates']
+GRID_X, GRID_Y = CONFIG['visualization']['grid_width'], CONFIG['visualization']['grid_height']
 
 class Vehicle:
     def __init__(self, vehicle_id, start_road):
@@ -20,6 +21,8 @@ class Vehicle:
         self.current_road = start_road
         self.position = 0
         self.speed = 0
+        self.x = random.randint(0, GRID_X - 1)
+        self.y = random.randint(0, GRID_Y - 1)
 
     def update(self, road_info):
         if road_info:
@@ -29,12 +32,17 @@ class Vehicle:
             if self.position >= ROAD_LENGTH:
                 self.position = 0
                 self.current_road = random.choice(list(road_info['available_roads']))
+                # Update x and y when changing roads
+                self.x = random.randint(0, CONFIG['visualization']['grid_width'] - 1)
+                self.y = random.randint(0, CONFIG['visualization']['grid_height'] - 1)
 
         return {
             'vehicle_id': self.id,
             'current_road': self.current_road,
             'position': self.position,
-            'speed': self.speed
+            'speed': self.speed,
+            'x': self.x,
+            'y': self.y
         }
 
 class AgentModule:
