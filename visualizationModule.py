@@ -112,12 +112,25 @@ class VisualizationModule:
                 marker=dict(color='red', size=12, symbol='x')
             )
 
+            # Add border lines
+            border_trace = go.Scatter(
+                x=[0, GRID_WIDTH, GRID_WIDTH, 0, 0],
+                y=[0, 0, GRID_HEIGHT, GRID_HEIGHT, 0],
+                mode='lines',
+                name='Grid Border',
+                line=dict(color='black', width=2),
+                hoverinfo='none'
+            )
+
             return {
-                'data': [vehicle_trace, traffic_light_trace, road_blockage_trace],
+                'data': [vehicle_trace, traffic_light_trace, road_blockage_trace, border_trace],
                 'layout': go.Layout(
-                    xaxis=dict(range=[0, GRID_WIDTH]),
-                    yaxis=dict(range=[0, GRID_HEIGHT]),
-                    title='Traffic Simulation'
+                    xaxis=dict(range=[-1, GRID_WIDTH + 1], showgrid=False, zeroline=False),
+                    yaxis=dict(range=[-1, GRID_HEIGHT + 1], showgrid=False, zeroline=False),
+                    title='Traffic Simulation',
+                    showlegend=True,
+                    legend=dict(x=0, y=1),
+                    margin=dict(l=40, r=40, t=40, b=40)
                 )
             }
 
