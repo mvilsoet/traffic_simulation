@@ -13,7 +13,6 @@ INITIAL_VEHICLES = CONFIG['vehicles']['initial_count']
 INITIAL_ROAD = CONFIG['roads']['initial_road']
 SQS_QUEUE_VEHICLE_UPDATES = CONFIG['sqs']['queue_vehicle_updates']
 SQS_QUEUE_TRAFFIC_UPDATES = CONFIG['sqs']['queue_traffic_updates']
-GRID_X, GRID_Y = CONFIG['visualization']['grid_width'], CONFIG['visualization']['grid_height']
 
 class Vehicle:
     def __init__(self, vehicle_id, start_road):
@@ -21,8 +20,8 @@ class Vehicle:
         self.current_road = start_road
         self.position = 0
         self.speed = 0
-        self.x = random.randint(0, GRID_X - 1)
-        self.y = random.randint(0, GRID_Y - 1)
+        self.x = random.randint(0, CONFIG['visualization']['grid_width'] - 1)
+        self.y = random.randint(0, CONFIG['visualization']['grid_height'] - 1)
 
     def update(self, road_info):
         if road_info:
@@ -48,11 +47,12 @@ class Vehicle:
 class AgentModule:
     def __init__(self):
         self.vehicles = []
+        self.next_vehicle_id = 0
 
     def create_vehicle(self, start_road):
-        vehicle_id = len(self.vehicles)
-        vehicle = Vehicle(vehicle_id, start_road)
+        vehicle = Vehicle(self.next_vehicle_id, start_road)
         self.vehicles.append(vehicle)
+        self.next_vehicle_id += 1
         return vehicle
 
     def update_all(self):
@@ -68,7 +68,12 @@ class AgentModule:
                     if vehicle.current_road == message['road_id']:
                         update_data = vehicle.update(message['road_info'])
                         send_sqs_message(SQS_QUEUE_VEHICLE_UPDATES, update_data)
+            elif message['type'] == 'create_vehicle':
+                new_vehicle = self.create_vehicle(message['start_road'])
+                update_data = new_vehicle.update(None)  # Initial update without road info
+                send_sqs_message(SQS_QUEUE_VEHICLE_UPDATES, update_data)
 
+        process_sqs_messages(SQS_QUEUE_VEHICLE_UPDATES, process_message)
         process_sqs_messages(SQS_QUEUE_TRAFFIC_UPDATES, process_message)
 
 if __name__ == "__main__":
