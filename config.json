@@ -20,7 +20,7 @@
     "initial_blocked_road": "R2"
   },
   "aws": {
-    "region": "us-west-1"
+    "region": "us-east-1"
   },
   "sqs": {
     "queue_vehicle_updates": "vehicle_updates",
