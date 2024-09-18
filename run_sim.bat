@@ -28,7 +28,13 @@ echo Starting Traffic Control System...
 start /b python trafficModule.py
 set TRAFFIC_PID=!ERRORLEVEL!
 
+:: Start Visualization Module
+echo Starting Visualization Module...
+start /b python visualizationModule.py
+set VIZ_PID=!ERRORLEVEL!
+
 echo All components started. Simulation running...
+echo Visualization dashboard available at http://localhost:8050
 
 :: Wait for the specified duration
 timeout /t %SIMULATION_DURATION% >nul
@@ -39,5 +45,8 @@ taskkill /PID %SQS_PID% /F >nul 2>&1
 taskkill /PID %CORE_PID% /F >nul 2>&1
 taskkill /PID %AGENT_PID% /F >nul 2>&1
 taskkill /PID %TRAFFIC_PID% /F >nul 2>&1
+taskkill /PID %VIZ_PID% /F >nul 2>&1
 
 echo Simulation completed.
+echo Press any key to exit...
+pause >nul
