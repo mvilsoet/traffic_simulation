@@ -71,10 +71,10 @@ class TrafficControlSystem:
                 self.road_blockages.remove(blockage)
 
         def process_message(message):
-            # Process any relevant vehicle updates if needed
-            pass
+            if message['type'] == 'create_road_blockage':
+                self.create_road_blockage(message['road_id'], message['duration'])
 
-        process_sqs_messages(SQS_QUEUE_VEHICLE_UPDATES, process_message)
+        process_sqs_messages(SQS_QUEUE_TRAFFIC_UPDATES, process_message)
 
 if __name__ == "__main__":
     traffic_system = TrafficControlSystem()
