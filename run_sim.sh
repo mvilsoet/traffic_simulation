@@ -7,7 +7,7 @@ SQS_INIT_DELAY=2
 # Function to terminate processes
 terminate_processes() {
     echo "Terminating simulation components..."
-    kill $SQS_PID $CORE_PID $AGENT_PID $TRAFFIC_PID $VIZ_PID 2>/dev/null
+    kill $SQS_PID $CORE_PID $AGENT_PID $TRAFFIC_PID 2>/dev/null
 }
 
 # Set up trap to handle script interruption
@@ -47,9 +47,11 @@ echo "Visualization dashboard available at http://localhost:8050"
 # Wait for the specified duration
 sleep $SIMULATION_DURATION
 
-# Terminate all processes
+# Terminate simulation components (excluding visualization)
 terminate_processes
 
-echo "Simulation completed."
-echo "Press Enter to exit..."
-read
+echo "Simulation completed. Visualization is still running."
+echo "Press Ctrl+C to exit completely."
+
+# Wait for user to terminate the script
+wait $VIZ_PID
