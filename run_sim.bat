@@ -30,21 +30,31 @@ set TRAFFIC_PID=!ERRORLEVEL!
 
 :: Start Visualization Module
 echo Starting Visualization Module...
-start python visualizationModule.py
+start /b python visualizationModule.py
+set VIZ_PID=!ERRORLEVEL!
 
 echo All components started. Simulation running...
 echo Visualization dashboard available at http://localhost:8050
+echo Press Ctrl+C to stop the simulation and close all components.
 
 :: Wait for the specified duration
 timeout /t %SIMULATION_DURATION% >nul
 
-:: Terminate simulation components (excluding visualization)
-echo Terminating simulation components...
+:LOOP
+tasklist | find " %VIZ_PID% " >nul
+if not errorlevel 1 (
+    timeout /t 1 >nul
+    goto :LOOP
+)
+
+:: Terminate all processes
+:TERMINATE
+echo Terminating all components...
 taskkill /PID %SQS_PID% /F >nul 2>&1
 taskkill /PID %CORE_PID% /F >nul 2>&1
 taskkill /PID %AGENT_PID% /F >nul 2>&1
 taskkill /PID %TRAFFIC_PID% /F >nul 2>&1
+taskkill /PID %VIZ_PID% /F >nul 2>&1
 
-echo Simulation completed. Visualization is still running.
-echo Close the visualization window or press Ctrl+C to exit completely.
-pause >nul
+echo Simulation and visualization terminated.
+exit /b
