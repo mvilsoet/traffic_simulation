@@ -69,9 +69,12 @@ class AgentModule:
                         update_data = vehicle.update(message['road_info'])
                         send_sqs_message(SQS_QUEUE_VEHICLE_UPDATES, update_data)
             elif message['type'] == 'create_vehicle':
-                new_vehicle = self.create_vehicle(message['start_road'])
-                update_data = new_vehicle.update(None)  # Initial update without road info
-                send_sqs_message(SQS_QUEUE_VEHICLE_UPDATES, update_data)
+                if 'start_road' in message:
+                    new_vehicle = self.create_vehicle(message['start_road'])
+                    update_data = new_vehicle.update(None)  # Initial update without road info
+                    send_sqs_message(SQS_QUEUE_VEHICLE_UPDATES, update_data)
+                else:
+                    print("Error: create_vehicle message missing start_road")
 
         process_sqs_messages(SQS_QUEUE_VEHICLE_UPDATES, process_message)
         process_sqs_messages(SQS_QUEUE_TRAFFIC_UPDATES, process_message)
