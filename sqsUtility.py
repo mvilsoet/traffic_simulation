@@ -3,7 +3,7 @@ import json
 import logging
 
 # Set up logging
-logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Load configuration
 try:
@@ -30,7 +30,6 @@ except Exception as e:
 
 def get_queue_url(queue_name):
     try:
-        logging.info(f"Attempting to get URL for queue: {queue_name}")
         response = sqs_client.get_queue_url(QueueName=queue_name)
         logging.info(f"Successfully retrieved URL for queue: {queue_name}")
         return response['QueueUrl']
@@ -44,7 +43,6 @@ def get_queue_url(queue_name):
 def send_sqs_message(queue_name, message):
     try:
         queue_url = get_queue_url(queue_name)
-        logging.info(f"Sending message to queue: {queue_name}")
         response = sqs_client.send_message(
             QueueUrl=queue_url,
             MessageBody=json.dumps(message)
@@ -58,7 +56,6 @@ def send_sqs_message(queue_name, message):
 def receive_sqs_messages(queue_name, max_messages=10, wait_time=20):
     try:
         queue_url = get_queue_url(queue_name)
-        logging.info(f"Receiving messages from queue: {queue_name}")
         response = sqs_client.receive_message(
             QueueUrl=queue_url,
             MaxNumberOfMessages=max_messages,
@@ -74,7 +71,6 @@ def receive_sqs_messages(queue_name, max_messages=10, wait_time=20):
 def delete_sqs_message(queue_name, receipt_handle):
     try:
         queue_url = get_queue_url(queue_name)
-        logging.info(f"Deleting message from queue: {queue_name}")
         sqs_client.delete_message(
             QueueUrl=queue_url,
             ReceiptHandle=receipt_handle
