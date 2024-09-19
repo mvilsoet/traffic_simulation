@@ -6,7 +6,7 @@ from dash import html, dcc
 from dash.dependencies import Input, Output, State
 import plotly.graph_objs as go
 from sqsUtility import process_sqs_messages, send_sqs_message
-from threading import Thread
+from threading import Thread, Event
 import queue
 import random
 
@@ -29,26 +29,34 @@ class VisualizationModule:
         self.road_blockages = {}
         self.roads = {}
         self.update_queue = queue.Queue()
+        self.stop_event = Event()
 
     def process_messages(self):
         def process_vehicle_message(message):
             if 'vehicle_id' in message:
                 self.update_queue.put(('vehicle', message))
+                logging.info(f"Received vehicle update: {message}")
 
         def process_traffic_message(message):
             if message['type'] == 'traffic_light_update':
                 self.update_queue.put(('traffic_light', message))
+                logging.info(f"Received traffic light update: {message}")
             elif message['type'] == 'road_blockage_update':
                 self.update_queue.put(('road_blockage', message))
+                logging.info(f"Received road blockage update: {message}")
             elif message['type'] == 'road_network_update':
-                print("UPDATE NETWORK: ", message)
                 self.update_queue.put(('road_network', message))
                 logging.info(f"Received road network update with {len(message['roads'])} roads")
             else:
-                print("FAILED TO SORT: ", message)
-        while True:
-            process_sqs_messages(SQS_QUEUE_VEHICLE_UPDATES, process_vehicle_message)
-            process_sqs_messages(SQS_QUEUE_TRAFFIC_UPDATES, process_traffic_message)
+                logging.warning(f"Received unknown message type: {message}")
+
+        while not self.stop_event.is_set():
+            try:
+                process_sqs_messages(SQS_QUEUE_VEHICLE_UPDATES, process_vehicle_message)
+                process_sqs_messages(SQS_QUEUE_TRAFFIC_UPDATES, process_traffic_message)
+            except Exception as e:
+                logging.error(f"Error processing messages: {str(e)}")
+            time.sleep(1)  # Add a small delay to prevent tight looping
 
     def create_random_roadblock(self):
         if not self.roads:
@@ -112,7 +120,8 @@ class VisualizationModule:
             elif button_id == 'create-vehicle-button':
                 self.create_random_vehicle()
 
-            while not self.update_queue.empty():
+            updates_processed = 0
+            while not self.update_queue.empty() and updates_processed < 100:  # Process up to 100 updates per frame
                 update_type, data = self.update_queue.get()
                 if update_type == 'vehicle':
                     self.vehicles[data['vehicle_id']] = (data['x'], data['y'])
@@ -130,6 +139,7 @@ class VisualizationModule:
                 elif update_type == 'road_network':
                     self.roads = data['roads']
                     logging.info(f"Updated road network with {len(self.roads)} roads")
+                updates_processed += 1
 
             road_traces = []
             for road_id, road_info in self.roads.items():
@@ -194,11 +204,20 @@ class VisualizationModule:
             }
 
         # Start the message processing in a separate thread
-        Thread(target=self.process_messages, daemon=True).start()
+        self.message_thread = Thread(target=self.process_messages, daemon=True)
+        self.message_thread.start()
 
         # Run the Dash app
         app.run_server(debug=True, host='0.0.0.0', port=8050)
 
+    def stop(self):
+        self.stop_event.set()
+        if self.message_thread.is_alive():
+            self.message_thread.join()
+
 if __name__ == "__main__":
     viz = VisualizationModule()
-    viz.run()
+    try:
+        viz.run()
+    finally:
+        viz.stop()
