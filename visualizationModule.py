@@ -187,3 +187,7 @@ class VisualizationModule:
 
         # Run the Dash app
         app.run_server(debug=True, host='0.0.0.0', port=8050)
+
+if __name__ == "__main__":
+    viz = VisualizationModule()
+    viz.run()
