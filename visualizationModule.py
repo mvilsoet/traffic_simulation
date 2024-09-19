@@ -23,12 +23,14 @@ class VisualizationModule:
         self.vehicles = {}
         self.traffic_lights = {}
         self.road_blockages = {}
+        self.roads = set()
         self.update_queue = queue.Queue()
 
     def update_vehicle(self, vehicle_data):
         vehicle_id = vehicle_data['vehicle_id']
         x, y = vehicle_data['x'], vehicle_data['y']
         self.vehicles[vehicle_id] = (x, y)
+        self.roads.add(vehicle_data['current_road'])
 
     def update_traffic_light(self, traffic_light_data):
         intersection_id = traffic_light_data['intersection_id']
@@ -44,6 +46,7 @@ class VisualizationModule:
             self.road_blockages[road_id] = (x % GRID_WIDTH, y % GRID_HEIGHT)
         elif road_id in self.road_blockages:
             del self.road_blockages[road_id]
+        self.roads.add(road_id)
 
     def process_messages(self):
         def process_vehicle_message(message):
@@ -59,6 +62,30 @@ class VisualizationModule:
         while True:
             process_sqs_messages(SQS_QUEUE_VEHICLE_UPDATES, process_vehicle_message)
             process_sqs_messages(SQS_QUEUE_TRAFFIC_UPDATES, process_traffic_message)
+
+    def create_random_roadblock(self):
+        if not self.roads:
+            print("No roads available for creating a roadblock.")
+            return
+
+        road_id = random.choice(list(self.roads))
+        message = {
+            'type': 'create_road_blockage',
+            'road_id': road_id,
+            'duration': random.randint(10, 60)  # Random duration between 10 and 60 seconds
+        }
+        send_sqs_message(SQS_QUEUE_TRAFFIC_UPDATES, message)
+
+    def create_random_vehicle(self):
+        if not self.roads:
+            print("No roads available for creating a vehicle.")
+            return
+
+        message = {
+            'type': 'create_vehicle',
+            'start_road': random.choice(list(self.roads))
+        }
+        send_sqs_message(SQS_QUEUE_VEHICLE_UPDATES, message)
 
     def run(self):
         app = dash.Dash(__name__)
@@ -109,7 +136,7 @@ class VisualizationModule:
                 y=[y for x, y in self.vehicles.values()],
                 mode='markers',
                 name='Vehicles',
-                marker=dict(color='blue', size=10)
+                marker=dict(color='blue', size=10, symbol='circle')
             )
 
             traffic_light_trace = go.Scatter(
@@ -120,7 +147,7 @@ class VisualizationModule:
                 marker=dict(
                     color=['green' if state == 'Green' else 'red' for _, _, state in self.traffic_lights.values()],
                     size=15,
-                    symbol='circle-dot'
+                    symbol='circle'
                 )
             )
 
@@ -154,44 +181,8 @@ class VisualizationModule:
                 )
             }
 
-    def create_random_roadblock(self):
-        road_id = f"R{random.randint(1, 1000)}"
-        message = {
-            'type': 'create_road_blockage',
-            'road_id': road_id,
-            'duration': random.randint(10, 60)  # Random duration between 10 and 60 seconds
-        }
-        send_sqs_message(SQS_QUEUE_TRAFFIC_UPDATES, message)
-
-    def create_random_vehicle(self):
-        message = {
-            'type': 'create_vehicle',
-            'start_road': f"R{random.randint(1, 10)}"  # Assuming roads are named R1, R2, etc.
-        }
-        send_sqs_message(SQS_QUEUE_VEHICLE_UPDATES, message)
-
-    def run(self):
-        app = dash.Dash(__name__)
-
-        app.layout = html.Div([
-            html.Div([
-                html.Button('Create Random Roadblock', id='create-roadblock-button', n_clicks=0),
-                html.Button('Create Random Vehicle', id='create-vehicle-button', n_clicks=0),
-            ], style={'padding': '10px'}),
-            dcc.Graph(id='live-graph', animate=True),
-            dcc.Interval(
-                id='graph-update',
-                interval=1000,  # in milliseconds
-                n_intervals=0
-            )
-        ])
-
         # Start the message processing in a separate thread
         Thread(target=self.process_messages, daemon=True).start()
 
         # Run the Dash app
         app.run_server(debug=True, host='0.0.0.0', port=8050)
-
-if __name__ == "__main__":
-    viz = VisualizationModule()
-    viz.run()
