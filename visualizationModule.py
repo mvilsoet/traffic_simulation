@@ -1,5 +1,6 @@
 import json
 import time
+import logging
 import dash
 from dash import html, dcc
 from dash.dependencies import Input, Output, State
@@ -8,6 +9,9 @@ from sqsUtility import process_sqs_messages, send_sqs_message
 from threading import Thread
 import queue
 import random
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Load configuration
 with open('config.json', 'r') as config_file:
@@ -38,6 +42,7 @@ class VisualizationModule:
                 self.update_queue.put(('road_blockage', message))
             elif message['type'] == 'road_network_update':
                 self.update_queue.put(('road_network', message))
+                logging.info(f"Received road network update with {len(message['roads'])} roads")
 
         while True:
             process_sqs_messages(SQS_QUEUE_VEHICLE_UPDATES, process_vehicle_message)
@@ -45,7 +50,7 @@ class VisualizationModule:
 
     def create_random_roadblock(self):
         if not self.roads:
-            print("No roads available for creating a roadblock.")
+            logging.warning("No roads available for creating a roadblock.")
             return
 
         road_id = random.choice(list(self.roads.keys()))
@@ -55,17 +60,20 @@ class VisualizationModule:
             'duration': random.randint(10, 60)  # Random duration between 10 and 60 seconds
         }
         send_sqs_message(SQS_QUEUE_TRAFFIC_UPDATES, message)
+        logging.info(f"Created random roadblock on road {road_id}")
 
     def create_random_vehicle(self):
         if not self.roads:
-            print("No roads available for creating a vehicle.")
+            logging.warning("No roads available for creating a vehicle.")
             return
 
+        road_id = random.choice(list(self.roads.keys()))
         message = {
             'type': 'create_vehicle',
-            'start_road': random.choice(list(self.roads.keys()))
+            'start_road': road_id
         }
         send_sqs_message(SQS_QUEUE_VEHICLE_UPDATES, message)
+        logging.info(f"Created random vehicle on road {road_id}")
 
     def run(self):
         app = dash.Dash(__name__)
@@ -119,6 +127,7 @@ class VisualizationModule:
                         del self.road_blockages[road_id]
                 elif update_type == 'road_network':
                     self.roads = data['roads']
+                    logging.info(f"Updated road network with {len(self.roads)} roads")
 
             road_traces = []
             for road_id, road_info in self.roads.items():
