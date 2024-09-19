@@ -1,79 +1,89 @@
-import time
+import asyncio
+import boto3
 import json
-import logging
-from sqsUtility import send_sqs_message, process_sqs_messages
+from botocore.exceptions import ClientError
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-with open('config.json', 'r') as config_file:
-    CONFIG = json.load(config_file)
-
-SIMULATION_STEP = CONFIG['simulation']['step']
-DEFAULT_SIMULATION_DURATION = CONFIG['simulation']['duration']
-SQS_QUEUE_VEHICLE_UPDATES = CONFIG['sqs']['queue_vehicle_updates']
-SQS_QUEUE_TRAFFIC_UPDATES = CONFIG['sqs']['queue_traffic_updates']
-GRID_WIDTH = CONFIG['visualization']['grid_width']
-GRID_HEIGHT = CONFIG['visualization']['grid_height']
-
-class SimulationCore:
+class SimCore:
     def __init__(self):
-        self.clock = 0
-        self.road_network = {}
-        self.initialize_grid_roads()
-
-    def initialize_grid_roads(self):
-        for i in range(GRID_WIDTH):
-            for j in range(GRID_HEIGHT):
-                if i < GRID_WIDTH - 1:
-                    self.add_road(f"H{i}-{j}", (i, j), (i+1, j), 60)
-                if j < GRID_HEIGHT - 1:
-                    self.add_road(f"V{i}-{j}", (i, j), (i, j+1), 60)
-        logging.info(f"Initialized road network with {len(self.road_network)} roads")
-        self.send_road_network()
-
-    def add_road(self, road_id, start_node, end_node, speed_limit):
-        self.road_network[road_id] = {
-            'start': start_node,
-            'end': end_node,
-            'speed_limit': speed_limit
+        self.state = {
+            'roads': {},
+            'vehicles': {},
+            'traffic_lights': {},
+            'road_blockages': {}
         }
+        self.sqs = boto3.client('sqs')
+        self.queue_urls = {}
 
-    def update(self):
-        self.clock += 1
+    async def initialize(self):
+        # Get queue URLs
+        queues = ['VehicleEvents.fifo', 'TrafficControlEvents.fifo', 'SimulationEvents']
+        for queue in queues:
+            try:
+                response = self.sqs.get_queue_url(QueueName=queue)
+                self.queue_urls[queue] = response['QueueUrl']
+            except ClientError as e:
+                print(f"Error getting queue URL for {queue}: {e}")
 
-        def process_message(message):
-            if message['type'] == 'road_info_request':
-                road_info = self.get_road_info(message['road_id'])
-                response = {
-                    'type': 'road_info_response',
-                    'road_id': message['road_id'],
-                    'road_info': road_info
-                }
-                send_sqs_message(SQS_QUEUE_TRAFFIC_UPDATES, response)
-            elif 'vehicle_id' in message:
-                logging.info(f"Vehicle {message['vehicle_id']} update: Road {message['current_road']}, Position {message['position']}")
+    async def process_messages(self):
+        while True:
+            for queue_name, queue_url in self.queue_urls.items():
+                try:
+                    response = self.sqs.receive_message(
+                        QueueUrl=queue_url,
+                        MaxNumberOfMessages=10,
+                        WaitTimeSeconds=20
+                    )
 
-        process_sqs_messages(SQS_QUEUE_VEHICLE_UPDATES, process_message)
+                    messages = response.get('Messages', [])
+                    for message in messages:
+                        event = json.loads(message['Body'])
+                        await self.process_event(event)
 
-    def run(self, duration=DEFAULT_SIMULATION_DURATION):
-        start_time = time.time()
-        while time.time() - start_time < duration:
-            self.update()
-            time.sleep(SIMULATION_STEP)
+                        # Delete the message from the queue
+                        self.sqs.delete_message(
+                            QueueUrl=queue_url,
+                            ReceiptHandle=message['ReceiptHandle']
+                        )
+                except Exception as e:
+                    print(f"Error processing messages from {queue_name}: {e}")
 
-    def get_road_info(self, road_id):
-        road_info = self.road_network.get(road_id, {})
-        road_info['available_roads'] = list(self.road_network.keys())
-        return road_info
+            await asyncio.sleep(0.1)  # Short sleep to prevent tight looping
 
-    def send_road_network(self):
-        message = {
-            'type': 'road_network_update',
-            'roads': self.road_network
-        }
-        send_sqs_message(SQS_QUEUE_TRAFFIC_UPDATES, message)
-        logging.info(f"Sent road network update with {len(self.road_network)} roads")
+    async def process_event(self, event):
+        event_type = event['type']
+
+        if event_type == 'VehicleMoved':
+            self.state['vehicles'][event['data']['vehicle_id']] = event['data']['position']
+        elif event_type == 'TrafficLightChanged':
+            self.state['traffic_lights'][event['data']['light_id']] = event['data']['state']
+        elif event_type == 'RoadBlockageCreated':
+            self.state['road_blockages'][event['data']['blockage_id']] = event['data']['location']
+        elif event_type == 'RoadBlockageRemoved':
+            self.state['road_blockages'].pop(event['data']['blockage_id'], None)
+
+        # Publish StateChanged event
+        await self.publish_event('StateChanged', self.state)
+
+    async def publish_event(self, event_type, data):
+        message_body = json.dumps({'type': event_type, 'data': data})
+        try:
+            self.sqs.send_message(
+                QueueUrl=self.queue_urls['SimulationEvents'],
+                MessageBody=message_body
+            )
+        except ClientError as e:
+            print(f"Error publishing {event_type} event: {e}")
+
+    async def run(self):
+        while True:
+            await self.publish_event('SimulationTick', {'time': self.state.get('time', 0)})
+            self.state['time'] = self.state.get('time', 0) + 1
+            await asyncio.sleep(1)  # Adjust tick rate as needed
+
+async def main():
+    sim_core = SimCore()
+    await sim_core.initialize()
+    await asyncio.gather(sim_core.run(), sim_core.process_messages())
 
 if __name__ == "__main__":
-    sim = SimulationCore()
-    sim.run()
+    asyncio.run(main())

@@ -1,94 +1,93 @@
-import random
+import asyncio
+import boto3
 import json
-from sqsUtility import send_sqs_message, process_sqs_messages
-
-# Load configuration
-with open('config.json', 'r') as config_file:
-    CONFIG = json.load(config_file)
-
-# Parameters from config
-ROAD_LENGTH = CONFIG['roads']['length']
-ACCELERATION = CONFIG['vehicles']['acceleration']
-INITIAL_VEHICLES = CONFIG['vehicles']['initial_count']
-SQS_QUEUE_VEHICLE_UPDATES = CONFIG['sqs']['queue_vehicle_updates']
-SQS_QUEUE_TRAFFIC_UPDATES = CONFIG['sqs']['queue_traffic_updates']
-
-class Vehicle:
-    def __init__(self, vehicle_id, start_road):
-        self.id = vehicle_id
-        self.current_road = start_road
-        self.position = 0
-        self.speed = 0
-        self.x = random.randint(0, CONFIG['visualization']['grid_width'] - 1)
-        self.y = random.randint(0, CONFIG['visualization']['grid_height'] - 1)
-
-    def update(self, road_info):
-        if road_info:
-            self.speed = min(self.speed + ACCELERATION, road_info['speed_limit'])
-            self.position += self.speed
-
-            if self.position >= ROAD_LENGTH:
-                self.position = 0
-                self.current_road = random.choice(list(road_info['available_roads']))
-                # Update x and y when changing roads
-                self.x = random.randint(0, CONFIG['visualization']['grid_width'] - 1)
-                self.y = random.randint(0, CONFIG['visualization']['grid_height'] - 1)
-
-        return {
-            'vehicle_id': self.id,
-            'current_road': self.current_road,
-            'position': self.position,
-            'speed': self.speed,
-            'x': self.x,
-            'y': self.y
-        }
+import random
+from botocore.exceptions import ClientError
 
 class AgentModule:
     def __init__(self):
-        self.vehicles = []
-        self.next_vehicle_id = 0
+        self.vehicles = {}
+        self.sqs = boto3.client('sqs')
+        self.queue_urls = {}
 
-    def create_vehicle(self, start_road):
-        vehicle = Vehicle(self.next_vehicle_id, start_road)
-        self.vehicles.append(vehicle)
-        self.next_vehicle_id += 1
-        return vehicle
+    async def initialize(self):
+        # Get queue URLs
+        queues = ['VehicleEvents.fifo', 'SimulationEvents']
+        for queue in queues:
+            try:
+                response = self.sqs.get_queue_url(QueueName=queue)
+                self.queue_urls[queue] = response['QueueUrl']
+            except ClientError as e:
+                print(f"Error getting queue URL for {queue}: {e}")
 
-    def update_all(self):
-        for vehicle in self.vehicles:
-            send_sqs_message(SQS_QUEUE_VEHICLE_UPDATES, {
-                'type': 'road_info_request',
-                'road_id': vehicle.current_road
+    async def process_messages(self):
+        while True:
+            try:
+                response = self.sqs.receive_message(
+                    QueueUrl=self.queue_urls['SimulationEvents'],
+                    MaxNumberOfMessages=10,
+                    WaitTimeSeconds=20
+                )
+
+                messages = response.get('Messages', [])
+                for message in messages:
+                    event = json.loads(message['Body'])
+                    if event['type'] == 'SimulationTick':
+                        await self.process_tick(event['data'])
+
+                    # Delete the message from the queue
+                    self.sqs.delete_message(
+                        QueueUrl=self.queue_urls['SimulationEvents'],
+                        ReceiptHandle=message['ReceiptHandle']
+                    )
+            except Exception as e:
+                print(f"Error processing messages: {e}")
+
+            await asyncio.sleep(0.1)  # Short sleep to prevent tight looping
+
+    async def process_tick(self, tick_data):
+        for vehicle_id, vehicle in self.vehicles.items():
+            # Simple movement logic (replace with more complex behavior as needed)
+            new_position = (
+                vehicle['position'][0] + random.uniform(-0.1, 0.1),
+                vehicle['position'][1] + random.uniform(-0.1, 0.1)
+            )
+            self.vehicles[vehicle_id]['position'] = new_position
+            
+            # Publish VehicleMoved event
+            await self.publish_event('VehicleMoved', {
+                'vehicle_id': vehicle_id,
+                'position': new_position
             })
 
-        def process_message(message):
-            if message['type'] == 'road_info_response':
-                for vehicle in self.vehicles:
-                    if vehicle.current_road == message['road_id']:
-                        update_data = vehicle.update(message['road_info'])
-                        send_sqs_message(SQS_QUEUE_VEHICLE_UPDATES, update_data)
-            elif message['type'] == 'create_vehicle':
-                if 'start_road' in message:
-                    new_vehicle = self.create_vehicle(message['start_road'])
-                    update_data = new_vehicle.update(None)  # Initial update without road info
-                    send_sqs_message(SQS_QUEUE_VEHICLE_UPDATES, update_data)
-                else:
-                    print("Error: create_vehicle message missing start_road")
+    async def publish_event(self, event_type, data):
+        message_body = json.dumps({'type': event_type, 'data': data})
+        try:
+            self.sqs.send_message(
+                QueueUrl=self.queue_urls['VehicleEvents.fifo'],
+                MessageBody=message_body,
+                MessageGroupId='vehicle_events'  # Required for FIFO queues
+            )
+        except ClientError as e:
+            print(f"Error publishing {event_type} event: {e}")
 
-        process_sqs_messages(SQS_QUEUE_VEHICLE_UPDATES, process_message)
-        process_sqs_messages(SQS_QUEUE_TRAFFIC_UPDATES, process_message)
+    async def create_vehicle(self, vehicle_id, initial_position):
+        self.vehicles[vehicle_id] = {'position': initial_position}
+        await self.publish_event('VehicleCreated', {
+            'vehicle_id': vehicle_id,
+            'position': initial_position
+        })
+
+async def main():
+    agent_module = AgentModule()
+    await agent_module.initialize()
+    
+    # Create some initial vehicles
+    for i in range(10):
+        await agent_module.create_vehicle(f"vehicle_{i}", (random.random() * 100, random.random() * 100))
+    
+    # Start processing messages
+    await agent_module.process_messages()
 
 if __name__ == "__main__":
-    agent_module = AgentModule()
-    
-    # Wait for road network update
-    def process_message(message):
-        if message['type'] == 'road_network_update':
-            roads = list(message['roads'].keys())
-            for _ in range(INITIAL_VEHICLES):
-                agent_module.create_vehicle(random.choice(roads))
-    
-    process_sqs_messages(SQS_QUEUE_TRAFFIC_UPDATES, process_message)
-
-    while True:
-        agent_module.update_all()
+    asyncio.run(main())

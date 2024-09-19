@@ -1,99 +1,111 @@
+import asyncio
+import boto3
 import json
 import random
-from sqsUtility import send_sqs_message, process_sqs_messages
+from botocore.exceptions import ClientError
 
-# Load configuration
-with open('config.json', 'r') as config_file:
-    CONFIG = json.load(config_file)
-
-# Parameters from config
-DEFAULT_TRAFFIC_LIGHT_CYCLE = CONFIG['traffic_light']['default_cycle']
-DEFAULT_ROAD_BLOCKAGE_DURATION = CONFIG['road_blockage']['default_duration']
-SQS_QUEUE_VEHICLE_UPDATES = CONFIG['sqs']['queue_vehicle_updates']
-SQS_QUEUE_TRAFFIC_UPDATES = CONFIG['sqs']['queue_traffic_updates']
-
-class TrafficLight:
-    def __init__(self, intersection_id, cycle_duration=DEFAULT_TRAFFIC_LIGHT_CYCLE):
-        self.intersection_id = intersection_id
-        self.cycle_duration = cycle_duration
-        self.current_state = "Green"
-        self.time_in_state = 0
-
-    def update(self):
-        self.time_in_state += 1
-        if self.time_in_state >= self.cycle_duration:
-            self.time_in_state = 0
-            self.current_state = "Green" if self.current_state == "Red" else "Red"
-        return {
-            'type': 'traffic_light_update',
-            'intersection_id': self.intersection_id,
-            'state': self.current_state
-        }
-
-class RoadBlockage:
-    def __init__(self, road_id, duration):
-        self.road_id = road_id
-        self.duration = duration
-        self.time_active = 0
-
-    def update(self):
-        self.time_active += 1
-        is_active = self.time_active < self.duration
-        return {
-            'type': 'road_blockage_update',
-            'road_id': self.road_id,
-            'is_blocked': is_active
-        }
-
-class TrafficControlSystem:
+class TrafficControlModule:
     def __init__(self):
         self.traffic_lights = {}
-        self.road_blockages = []
+        self.road_blockages = {}
+        self.sqs = boto3.client('sqs')
+        self.queue_urls = {}
 
-    def add_traffic_light(self, intersection_id, cycle_duration=DEFAULT_TRAFFIC_LIGHT_CYCLE):
-        traffic_light = TrafficLight(intersection_id, cycle_duration)
-        self.traffic_lights[intersection_id] = traffic_light
+    async def initialize(self):
+        # Get queue URLs
+        queues = ['TrafficControlEvents.fifo', 'SimulationEvents']
+        for queue in queues:
+            try:
+                response = self.sqs.get_queue_url(QueueName=queue)
+                self.queue_urls[queue] = response['QueueUrl']
+            except ClientError as e:
+                print(f"Error getting queue URL for {queue}: {e}")
 
-    def create_road_blockage(self, road_id, duration=DEFAULT_ROAD_BLOCKAGE_DURATION):
-        blockage = RoadBlockage(road_id, duration)
-        self.road_blockages.append(blockage)
+    async def process_messages(self):
+        while True:
+            try:
+                response = self.sqs.receive_message(
+                    QueueUrl=self.queue_urls['SimulationEvents'],
+                    MaxNumberOfMessages=10,
+                    WaitTimeSeconds=20
+                )
 
-    def update_all(self):
-        for light in self.traffic_lights.values():
-            update = light.update()
-            send_sqs_message(SQS_QUEUE_TRAFFIC_UPDATES, update)
+                messages = response.get('Messages', [])
+                for message in messages:
+                    event = json.loads(message['Body'])
+                    if event['type'] == 'SimulationTick':
+                        await self.process_tick(event['data'])
 
-        for blockage in self.road_blockages[:]:
-            update = blockage.update()
-            send_sqs_message(SQS_QUEUE_TRAFFIC_UPDATES, update)
-            if not update['is_blocked']:
-                self.road_blockages.remove(blockage)
+                    # Delete the message from the queue
+                    self.sqs.delete_message(
+                        QueueUrl=self.queue_urls['SimulationEvents'],
+                        ReceiptHandle=message['ReceiptHandle']
+                    )
+            except Exception as e:
+                print(f"Error processing messages: {e}")
 
-        def process_message(message):
-            if message['type'] == 'create_road_blockage':
-                if 'road_id' in message and 'duration' in message:
-                    self.create_road_blockage(message['road_id'], message['duration'])
-                else:
-                    print("Error: create_road_blockage message missing road_id or duration")
+            await asyncio.sleep(0.1)  # Short sleep to prevent tight looping
 
-        process_sqs_messages(SQS_QUEUE_TRAFFIC_UPDATES, process_message)
+    async def process_tick(self, tick_data):
+        # Update traffic lights
+        for light_id, light in self.traffic_lights.items():
+            if random.random() < 0.1:  # 10% chance to change light
+                new_state = 'green' if light['state'] == 'red' else 'red'
+                self.traffic_lights[light_id]['state'] = new_state
+                await self.publish_event('TrafficLightChanged', {
+                    'light_id': light_id,
+                    'state': new_state
+                })
+
+        # Update road blockages
+        for blockage_id, blockage in list(self.road_blockages.items()):
+            blockage['duration'] -= 1
+            if blockage['duration'] <= 0:
+                del self.road_blockages[blockage_id]
+                await self.publish_event('RoadBlockageRemoved', {
+                    'blockage_id': blockage_id
+                })
+
+        # Randomly create new road blockages
+        if random.random() < 0.05:  # 5% chance to create a new blockage
+            blockage_id = f"blockage_{len(self.road_blockages)}"
+            self.road_blockages[blockage_id] = {
+                'location': (random.random() * 100, random.random() * 100),
+                'duration': random.randint(10, 50)
+            }
+            await self.publish_event('RoadBlockageCreated', {
+                'blockage_id': blockage_id,
+                'location': self.road_blockages[blockage_id]['location']
+            })
+
+    async def publish_event(self, event_type, data):
+        message_body = json.dumps({'type': event_type, 'data': data})
+        try:
+            self.sqs.send_message(
+                QueueUrl=self.queue_urls['TrafficControlEvents.fifo'],
+                MessageBody=message_body,
+                MessageGroupId='traffic_control_events'  # Required for FIFO queues
+            )
+        except ClientError as e:
+            print(f"Error publishing {event_type} event: {e}")
+
+    async def create_traffic_light(self, light_id, initial_state):
+        self.traffic_lights[light_id] = {'state': initial_state}
+        await self.publish_event('TrafficLightChanged', {
+            'light_id': light_id,
+            'state': initial_state
+        })
+
+async def main():
+    traffic_control = TrafficControlModule()
+    await traffic_control.initialize()
+    
+    # Create some initial traffic lights
+    for i in range(5):
+        await traffic_control.create_traffic_light(f"light_{i}", random.choice(['red', 'green']))
+    
+    # Start processing messages
+    await traffic_control.process_messages()
 
 if __name__ == "__main__":
-    traffic_system = TrafficControlSystem()
-
-    # Wait for road network update
-    def process_message(message):
-        if message['type'] == 'road_network_update':
-            roads = list(message['roads'].keys())
-            # Add traffic lights to random intersections
-            for _ in range(5):  # Add 5 random traffic lights
-                intersection = random.choice(roads)
-                traffic_system.add_traffic_light(intersection)
-            # Create a road blockage on a random road
-            blocked_road = random.choice(roads)
-            traffic_system.create_road_blockage(blocked_road)
-    
-    process_sqs_messages(SQS_QUEUE_TRAFFIC_UPDATES, process_message)
-
-    while True:
-        traffic_system.update_all()
+    asyncio.run(main())

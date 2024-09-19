@@ -1,98 +1,63 @@
+import asyncio
+import boto3
 import json
-import time
-import logging
+from botocore.exceptions import ClientError
 import dash
 from dash import html, dcc
-from dash.dependencies import Input, Output, State
+from dash.dependencies import Input, Output
 import plotly.graph_objs as go
-from sqsUtility import process_sqs_messages, send_sqs_message
-from threading import Thread, Event
-import queue
-import random
-
-# Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# Load configuration
-with open('config.json', 'r') as config_file:
-    CONFIG = json.load(config_file)
-
-GRID_WIDTH = CONFIG['visualization']['grid_width']
-GRID_HEIGHT = CONFIG['visualization']['grid_height']
-SQS_QUEUE_VEHICLE_UPDATES = CONFIG['sqs']['queue_vehicle_updates']
-SQS_QUEUE_TRAFFIC_UPDATES = CONFIG['sqs']['queue_traffic_updates']
+from collections import deque
 
 class VisualizationModule:
     def __init__(self):
-        self.vehicles = {}
-        self.traffic_lights = {}
-        self.road_blockages = {}
-        self.roads = {}
-        self.update_queue = queue.Queue()
-        self.stop_event = Event()
+        self.state = {
+            'vehicles': {},
+            'traffic_lights': {},
+            'road_blockages': {}
+        }
+        self.sqs = boto3.client('sqs')
+        self.queue_urls = {}
+        self.update_queue = deque(maxlen=100)  # Store up to 100 updates
 
-    def process_messages(self):
-        def process_vehicle_message(message):
-            if 'vehicle_id' in message:
-                self.update_queue.put(('vehicle', message))
-                logging.info(f"Received vehicle update: {message}")
-
-        def process_traffic_message(message):
-            if message['type'] == 'traffic_light_update':
-                self.update_queue.put(('traffic_light', message))
-                logging.info(f"Received traffic light update: {message}")
-            elif message['type'] == 'road_blockage_update':
-                self.update_queue.put(('road_blockage', message))
-                logging.info(f"Received road blockage update: {message}")
-            elif message['type'] == 'road_network_update':
-                self.update_queue.put(('road_network', message))
-                logging.info(f"Received road network update with {len(message['roads'])} roads")
-            else:
-                logging.warning(f"Received unknown message type: {message}")
-
-        while not self.stop_event.is_set():
+    async def initialize(self):
+        # Get queue URLs
+        queues = ['SimulationEvents', 'VehicleEvents.fifo', 'TrafficControlEvents.fifo']
+        for queue in queues:
             try:
-                process_sqs_messages(SQS_QUEUE_VEHICLE_UPDATES, process_vehicle_message)
-                process_sqs_messages(SQS_QUEUE_TRAFFIC_UPDATES, process_traffic_message)
-            except Exception as e:
-                logging.error(f"Error processing messages: {str(e)}")
-            time.sleep(1)  # Add a small delay to prevent tight looping
+                response = self.sqs.get_queue_url(QueueName=queue)
+                self.queue_urls[queue] = response['QueueUrl']
+            except ClientError as e:
+                print(f"Error getting queue URL for {queue}: {e}")
 
-    def create_random_roadblock(self):
-        if not self.roads:
-            logging.warning("No roads available for creating a roadblock.")
-            return
+    async def process_messages(self):
+        while True:
+            for queue_name, queue_url in self.queue_urls.items():
+                try:
+                    response = self.sqs.receive_message(
+                        QueueUrl=queue_url,
+                        MaxNumberOfMessages=10,
+                        WaitTimeSeconds=1
+                    )
 
-        road_id = random.choice(list(self.roads.keys()))
-        message = {
-            'type': 'create_road_blockage',
-            'road_id': road_id,
-            'duration': random.randint(10, 60)  # Random duration between 10 and 60 seconds
-        }
-        send_sqs_message(SQS_QUEUE_TRAFFIC_UPDATES, message)
-        logging.info(f"Created random roadblock on road {road_id}")
+                    messages = response.get('Messages', [])
+                    for message in messages:
+                        event = json.loads(message['Body'])
+                        self.update_queue.append(event)
 
-    def create_random_vehicle(self):
-        if not self.roads:
-            logging.warning("No roads available for creating a vehicle.")
-            return
+                        # Delete the message from the queue
+                        self.sqs.delete_message(
+                            QueueUrl=queue_url,
+                            ReceiptHandle=message['ReceiptHandle']
+                        )
+                except Exception as e:
+                    print(f"Error processing messages from {queue_name}: {e}")
 
-        road_id = random.choice(list(self.roads.keys()))
-        message = {
-            'type': 'create_vehicle',
-            'start_road': road_id
-        }
-        send_sqs_message(SQS_QUEUE_VEHICLE_UPDATES, message)
-        logging.info(f"Created random vehicle on road {road_id}")
+            await asyncio.sleep(0.1)  # Short sleep to prevent tight looping
 
-    def run(self):
+    def create_dash_app(self):
         app = dash.Dash(__name__)
 
         app.layout = html.Div([
-            html.Div([
-                html.Button('Create Random Roadblock', id='create-roadblock-button', n_clicks=0),
-                html.Button('Create Random Vehicle', id='create-vehicle-button', n_clicks=0),
-            ], style={'padding': '10px'}),
             dcc.Graph(id='live-graph', animate=True),
             dcc.Interval(
                 id='graph-update',
@@ -103,121 +68,85 @@ class VisualizationModule:
 
         @app.callback(
             Output('live-graph', 'figure'),
-            Input('graph-update', 'n_intervals'),
-            Input('create-roadblock-button', 'n_clicks'),
-            Input('create-vehicle-button', 'n_clicks'),
-            State('live-graph', 'figure')
+            Input('graph-update', 'n_intervals')
         )
-        def update_graph_scatter(n, roadblock_clicks, vehicle_clicks, current_figure):
-            ctx = dash.callback_context
-            if not ctx.triggered:
-                button_id = 'No clicks yet'
-            else:
-                button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+        def update_graph(n):
+            # Process all queued updates
+            while self.update_queue:
+                event = self.update_queue.popleft()
+                self.process_event(event)
 
-            if button_id == 'create-roadblock-button':
-                self.create_random_roadblock()
-            elif button_id == 'create-vehicle-button':
-                self.create_random_vehicle()
-
-            updates_processed = 0
-            while not self.update_queue.empty() and updates_processed < 100:  # Process up to 100 updates per frame
-                update_type, data = self.update_queue.get()
-                if update_type == 'vehicle':
-                    self.vehicles[data['vehicle_id']] = (data['x'], data['y'])
-                elif update_type == 'traffic_light':
-                    intersection_id = data['intersection_id']
-                    x, y = divmod(hash(intersection_id), GRID_WIDTH)
-                    self.traffic_lights[intersection_id] = (x % GRID_WIDTH, y % GRID_HEIGHT, data['state'])
-                elif update_type == 'road_blockage':
-                    road_id = data['road_id']
-                    if data['is_blocked']:
-                        x, y = divmod(hash(road_id), GRID_WIDTH)
-                        self.road_blockages[road_id] = (x % GRID_WIDTH, y % GRID_HEIGHT)
-                    elif road_id in self.road_blockages:
-                        del self.road_blockages[road_id]
-                elif update_type == 'road_network':
-                    self.roads = data['roads']
-                    logging.info(f"Updated road network with {len(self.roads)} roads")
-                updates_processed += 1
-
-            road_traces = []
-            for road_id, road_info in self.roads.items():
-                start, end = road_info['start'], road_info['end']
-                road_traces.append(go.Scatter(
-                    x=[start[0], end[0]],
-                    y=[start[1], end[1]],
-                    mode='lines',
-                    line=dict(color='gray', width=1, dash='dot'),
-                    hoverinfo='none',
-                    showlegend=False
-                ))
-
+            # Create traces for vehicles, traffic lights, and road blockages
             vehicle_trace = go.Scatter(
-                x=[x for x, y in self.vehicles.values()],
-                y=[y for x, y in self.vehicles.values()],
+                x=[v['position'][0] for v in self.state['vehicles'].values()],
+                y=[v['position'][1] for v in self.state['vehicles'].values()],
                 mode='markers',
                 name='Vehicles',
                 marker=dict(color='blue', size=10, symbol='circle')
             )
 
             traffic_light_trace = go.Scatter(
-                x=[x for x, y, state in self.traffic_lights.values()],
-                y=[y for x, y, state in self.traffic_lights.values()],
+                x=[t['position'][0] for t in self.state['traffic_lights'].values()],
+                y=[t['position'][1] for t in self.state['traffic_lights'].values()],
                 mode='markers',
                 name='Traffic Lights',
                 marker=dict(
-                    color=['green' if state == 'Green' else 'red' for _, _, state in self.traffic_lights.values()],
+                    color=['green' if t['state'] == 'green' else 'red' for t in self.state['traffic_lights'].values()],
                     size=15,
-                    symbol='circle'
+                    symbol='square'
                 )
             )
 
             road_blockage_trace = go.Scatter(
-                x=[x for x, y in self.road_blockages.values()],
-                y=[y for x, y in self.road_blockages.values()],
+                x=[b['position'][0] for b in self.state['road_blockages'].values()],
+                y=[b['position'][1] for b in self.state['road_blockages'].values()],
                 mode='markers',
                 name='Road Blockages',
-                marker=dict(color='red', size=12, symbol='x')
-            )
-
-            # Add border lines
-            border_trace = go.Scatter(
-                x=[0, GRID_WIDTH, GRID_WIDTH, 0, 0],
-                y=[0, 0, GRID_HEIGHT, GRID_HEIGHT, 0],
-                mode='lines',
-                name='Grid Border',
-                line=dict(color='black', width=2),
-                hoverinfo='none'
+                marker=dict(color='orange', size=12, symbol='triangle-up')
             )
 
             return {
-                'data': road_traces + [vehicle_trace, traffic_light_trace, road_blockage_trace, border_trace],
+                'data': [vehicle_trace, traffic_light_trace, road_blockage_trace],
                 'layout': go.Layout(
-                    xaxis=dict(range=[-1, GRID_WIDTH + 1], showgrid=False, zeroline=False),
-                    yaxis=dict(range=[-1, GRID_HEIGHT + 1], showgrid=False, zeroline=False),
-                    title='Traffic Simulation',
-                    showlegend=True,
-                    legend=dict(x=0, y=1),
-                    margin=dict(l=40, r=40, t=40, b=40)
+                    xaxis=dict(range=[0, 100]),
+                    yaxis=dict(range=[0, 100]),
+                    title='Traffic Simulation'
                 )
             }
 
-        # Start the message processing in a separate thread
-        self.message_thread = Thread(target=self.process_messages, daemon=True)
-        self.message_thread.start()
+        return app
 
-        # Run the Dash app
-        app.run_server(debug=True, host='0.0.0.0', port=8050)
+    def process_event(self, event):
+        event_type = event['type']
+        data = event['data']
 
-    def stop(self):
-        self.stop_event.set()
-        if self.message_thread.is_alive():
-            self.message_thread.join()
+        if event_type == 'VehicleMoved' or event_type == 'VehicleCreated':
+            self.state['vehicles'][data['vehicle_id']] = {'position': data['position']}
+        elif event_type == 'TrafficLightChanged':
+            self.state['traffic_lights'][data['light_id']] = {
+                'state': data['state'],
+                'position': self.state['traffic_lights'].get(data['light_id'], {}).get('position', (0, 0))
+            }
+        elif event_type == 'RoadBlockageCreated':
+            self.state['road_blockages'][data['blockage_id']] = {'position': data['location']}
+        elif event_type == 'RoadBlockageRemoved':
+            self.state['road_blockages'].pop(data['blockage_id'], None)
+
+async def run_async_tasks(viz_module):
+    await viz_module.initialize()
+    await viz_module.process_messages()
+
+def run_dash_app(viz_module):
+    app = viz_module.create_dash_app()
+    app.run_server(debug=True, use_reloader=False)
 
 if __name__ == "__main__":
-    viz = VisualizationModule()
-    try:
-        viz.run()
-    finally:
-        viz.stop()
+    viz_module = VisualizationModule()
+    
+    # Run the async task in a separate thread
+    import threading
+    thread = threading.Thread(target=lambda: asyncio.run(run_async_tasks(viz_module)))
+    thread.start()
+
+    # Run the Dash app in the main thread
+    run_dash_app(viz_module)
