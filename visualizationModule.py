@@ -2,11 +2,12 @@ import json
 import time
 import dash
 from dash import html, dcc
-from dash.dependencies import Input, Output
+from dash.dependencies import Input, Output, State
 import plotly.graph_objs as go
-from sqsUtility import process_sqs_messages
+from sqsUtility import process_sqs_messages, send_sqs_message
 from threading import Thread
 import queue
+import random
 
 # Load configuration
 with open('config.json', 'r') as config_file:
@@ -63,7 +64,10 @@ class VisualizationModule:
         app = dash.Dash(__name__)
 
         app.layout = html.Div([
-            html.H1('Traffic Simulation Dashboard'),
+            html.Div([
+                html.Button('Create Random Roadblock', id='create-roadblock-button', n_clicks=0),
+                html.Button('Create Random Vehicle', id='create-vehicle-button', n_clicks=0),
+            ], style={'padding': '10px'}),
             dcc.Graph(id='live-graph', animate=True),
             dcc.Interval(
                 id='graph-update',
@@ -72,9 +76,25 @@ class VisualizationModule:
             )
         ])
 
-        @app.callback(Output('live-graph', 'figure'),
-                      Input('graph-update', 'n_intervals'))
-        def update_graph_scatter(n):
+        @app.callback(
+            Output('live-graph', 'figure'),
+            Input('graph-update', 'n_intervals'),
+            Input('create-roadblock-button', 'n_clicks'),
+            Input('create-vehicle-button', 'n_clicks'),
+            State('live-graph', 'figure')
+        )
+        def update_graph_scatter(n, roadblock_clicks, vehicle_clicks, current_figure):
+            ctx = dash.callback_context
+            if not ctx.triggered:
+                button_id = 'No clicks yet'
+            else:
+                button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+
+            if button_id == 'create-roadblock-button':
+                self.create_random_roadblock()
+            elif button_id == 'create-vehicle-button':
+                self.create_random_vehicle()
+
             while not self.update_queue.empty():
                 update_type, data = self.update_queue.get()
                 if update_type == 'vehicle':
@@ -133,6 +153,38 @@ class VisualizationModule:
                     margin=dict(l=40, r=40, t=40, b=40)
                 )
             }
+
+    def create_random_roadblock(self):
+        road_id = f"R{random.randint(1, 1000)}"
+        message = {
+            'type': 'create_road_blockage',
+            'road_id': road_id,
+            'duration': random.randint(10, 60)  # Random duration between 10 and 60 seconds
+        }
+        send_sqs_message(SQS_QUEUE_TRAFFIC_UPDATES, message)
+
+    def create_random_vehicle(self):
+        message = {
+            'type': 'create_vehicle',
+            'start_road': f"R{random.randint(1, 10)}"  # Assuming roads are named R1, R2, etc.
+        }
+        send_sqs_message(SQS_QUEUE_VEHICLE_UPDATES, message)
+
+    def run(self):
+        app = dash.Dash(__name__)
+
+        app.layout = html.Div([
+            html.Div([
+                html.Button('Create Random Roadblock', id='create-roadblock-button', n_clicks=0),
+                html.Button('Create Random Vehicle', id='create-vehicle-button', n_clicks=0),
+            ], style={'padding': '10px'}),
+            dcc.Graph(id='live-graph', animate=True),
+            dcc.Interval(
+                id='graph-update',
+                interval=1000,  # in milliseconds
+                n_intervals=0
+            )
+        ])
 
         # Start the message processing in a separate thread
         Thread(target=self.process_messages, daemon=True).start()
