@@ -80,10 +80,17 @@ class SimCore:
             self.state['time'] = self.state.get('time', 0) + 1
             await asyncio.sleep(1)  # Adjust tick rate as needed
 
+
 async def main():
+    print("Starting SimCore...")
     sim_core = SimCore()
     await sim_core.initialize()
-    await asyncio.gather(sim_core.run(), sim_core.process_messages())
+    print("SimCore initialized. Starting simulation...")
+    try:
+        await asyncio.gather(sim_core.run(), sim_core.process_messages())
+    except KeyboardInterrupt:
+        print("Simulation stopped by user.")
+    print("SimCore shutting down.")
 
 if __name__ == "__main__":
     asyncio.run(main())

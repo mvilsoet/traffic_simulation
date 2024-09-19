@@ -79,15 +79,24 @@ class AgentModule:
         })
 
 async def main():
+    print("Starting AgentModule...")
     agent_module = AgentModule()
     await agent_module.initialize()
+    print("AgentModule initialized. Creating initial vehicles...")
     
     # Create some initial vehicles
     for i in range(10):
         await agent_module.create_vehicle(f"vehicle_{i}", (random.random() * 100, random.random() * 100))
+    print("10 initial vehicles created. Starting to process messages...")
     
-    # Start processing messages
-    await agent_module.process_messages()
+    try:
+        await agent_module.process_messages()
+    except KeyboardInterrupt:
+        print("AgentModule stopped by user.")
+    except Exception as e:
+        print(f"Error in AgentModule: {e}")
+    finally:
+        print("AgentModule shutting down.")
 
 if __name__ == "__main__":
     asyncio.run(main())

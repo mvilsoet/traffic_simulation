@@ -141,12 +141,22 @@ def run_dash_app(viz_module):
     app.run_server(debug=True, use_reloader=False)
 
 if __name__ == "__main__":
+    print("Starting VisualizationModule...")
     viz_module = VisualizationModule()
     
     # Run the async task in a separate thread
     import threading
     thread = threading.Thread(target=lambda: asyncio.run(run_async_tasks(viz_module)))
     thread.start()
+    print("Async tasks started in separate thread.")
 
-    # Run the Dash app in the main thread
-    run_dash_app(viz_module)
+    print("Starting Dash application...")
+    try:
+        # Run the Dash app in the main thread
+        run_dash_app(viz_module)
+    except KeyboardInterrupt:
+        print("VisualizationModule stopped by user.")
+    except Exception as e:
+        print(f"Error in VisualizationModule: {e}")
+    finally:
+        print("VisualizationModule shutting down.")

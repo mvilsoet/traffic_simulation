@@ -99,6 +99,30 @@ def process_sqs_messages(queue_name, callback, max_messages=10, wait_time=20):
         except Exception as e:
             logging.error(f"Error processing message: {str(e)}")
 
-# Example usage and testing
+
 if __name__ == "__main__":
+    # print("Testing SQS Utility...")
+    # try:
+    #     # Test queue URL retrieval
+    #     test_queue_name = SQS_QUEUE_VEHICLE_UPDATES
+    #     queue_url = get_queue_url(test_queue_name)
+    #     print(f"Successfully retrieved URL for queue: {test_queue_name}")
+
+    #     # Test message sending
+    #     test_message = {"type": "test", "data": {"message": "This is a test"}}
+    #     response = send_sqs_message(test_queue_name, test_message)
+    #     print(f"Test message sent. MessageId: {response['MessageId']}")
+
+    #     # Test message receiving and deletion
+    #     messages = receive_sqs_messages(test_queue_name, max_messages=1, wait_time=5)
+    #     if messages:
+    #         print(f"Received test message: {messages[0]['Body']}")
+    #         delete_sqs_message(test_queue_name, messages[0]['ReceiptHandle'])
+    #         print("Test message deleted from queue.")
+    #     else:
+    #         print("No messages received. This is expected if the queue was empty.")
+
+    #     print("SQS Utility test completed successfully.")
+    # except Exception as e:
+    #     print(f"Error during SQS Utility test: {str(e)}")
     pass

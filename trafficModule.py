@@ -97,15 +97,24 @@ class TrafficControlModule:
         })
 
 async def main():
+    print("Starting TrafficControlModule...")
     traffic_control = TrafficControlModule()
     await traffic_control.initialize()
+    print("TrafficControlModule initialized. Creating initial traffic lights...")
     
     # Create some initial traffic lights
     for i in range(5):
         await traffic_control.create_traffic_light(f"light_{i}", random.choice(['red', 'green']))
+    print("5 initial traffic lights created. Starting to process messages...")
     
-    # Start processing messages
-    await traffic_control.process_messages()
+    try:
+        await traffic_control.process_messages()
+    except KeyboardInterrupt:
+        print("TrafficControlModule stopped by user.")
+    except Exception as e:
+        print(f"Error in TrafficControlModule: {e}")
+    finally:
+        print("TrafficControlModule shutting down.")
 
 if __name__ == "__main__":
     asyncio.run(main())
