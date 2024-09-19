@@ -1,6 +1,7 @@
 import boto3
 import json
 import logging
+import time
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -28,16 +29,30 @@ except Exception as e:
     logging.error(f"Error creating SQS client: {str(e)}")
     raise
 
+# Dictionary to store queue URLs
+queue_urls = {}
+
 def get_queue_url(queue_name):
+    if queue_name not in queue_urls:
+        try:
+            response = sqs_client.get_queue_url(QueueName=queue_name)
+            queue_urls[queue_name] = response['QueueUrl']
+            logging.info(f"Retrieved and stored URL for queue: {queue_name}")
+        except sqs_client.exceptions.QueueDoesNotExist:
+            logging.error(f"Queue does not exist: {queue_name}")
+            raise
+        except Exception as e:
+            logging.error(f"Error getting queue URL for {queue_name}: {str(e)}")
+            raise
+    return queue_urls[queue_name]
+
+def refresh_queue_url(queue_name):
     try:
         response = sqs_client.get_queue_url(QueueName=queue_name)
-        logging.info(f"Successfully retrieved URL for queue: {queue_name}")
-        return response['QueueUrl']
-    except sqs_client.exceptions.QueueDoesNotExist:
-        logging.error(f"Queue does not exist: {queue_name}")
-        raise
+        queue_urls[queue_name] = response['QueueUrl']
+        logging.info(f"Refreshed URL for queue: {queue_name}")
     except Exception as e:
-        logging.error(f"Error getting queue URL for {queue_name}: {str(e)}")
+        logging.error(f"Error refreshing queue URL for {queue_name}: {str(e)}")
         raise
 
 def send_sqs_message(queue_name, message):
@@ -49,6 +64,9 @@ def send_sqs_message(queue_name, message):
         )
         logging.info(f"Message sent successfully to queue: {queue_name}")
         return response
+    except sqs_client.exceptions.QueueDoesNotExist:
+        refresh_queue_url(queue_name)
+        return send_sqs_message(queue_name, message)
     except Exception as e:
         logging.error(f"Error sending message to queue {queue_name}: {str(e)}")
         raise
@@ -64,6 +82,9 @@ def receive_sqs_messages(queue_name, max_messages=10, wait_time=20):
         messages = response.get('Messages', [])
         logging.info(f"Received {len(messages)} messages from queue: {queue_name}")
         return messages
+    except sqs_client.exceptions.QueueDoesNotExist:
+        refresh_queue_url(queue_name)
+        return receive_sqs_messages(queue_name, max_messages, wait_time)
     except Exception as e:
         logging.error(f"Error receiving messages from queue {queue_name}: {str(e)}")
         raise
@@ -76,6 +97,9 @@ def delete_sqs_message(queue_name, receipt_handle):
             ReceiptHandle=receipt_handle
         )
         logging.info(f"Message deleted successfully from queue: {queue_name}")
+    except sqs_client.exceptions.QueueDoesNotExist:
+        refresh_queue_url(queue_name)
+        delete_sqs_message(queue_name, receipt_handle)
     except Exception as e:
         logging.error(f"Error deleting message from queue {queue_name}: {str(e)}")
         raise
@@ -90,9 +114,7 @@ def process_sqs_messages(queue_name, callback):
                 delete_sqs_message(queue_name, message['ReceiptHandle'])
         except Exception as e:
             logging.error(f"Error processing messages from queue {queue_name}: {str(e)}")
-            # You might want to add a sleep here to prevent tight looping in case of persistent errors
-            # import time
-            # time.sleep(5)
+            time.sleep(5)
 
 # Example usage and testing
 if __name__ == "__main__":
