@@ -10,7 +10,6 @@ with open('config.json', 'r') as config_file:
 ROAD_LENGTH = CONFIG['roads']['length']
 ACCELERATION = CONFIG['vehicles']['acceleration']
 INITIAL_VEHICLES = CONFIG['vehicles']['initial_count']
-INITIAL_ROAD = CONFIG['roads']['initial_road']
 SQS_QUEUE_VEHICLE_UPDATES = CONFIG['sqs']['queue_vehicle_updates']
 SQS_QUEUE_TRAFFIC_UPDATES = CONFIG['sqs']['queue_traffic_updates']
 
@@ -81,8 +80,15 @@ class AgentModule:
 
 if __name__ == "__main__":
     agent_module = AgentModule()
-    for _ in range(INITIAL_VEHICLES):
-        agent_module.create_vehicle(INITIAL_ROAD)
+    
+    # Wait for road network update
+    def process_message(message):
+        if message['type'] == 'road_network_update':
+            roads = list(message['roads'].keys())
+            for _ in range(INITIAL_VEHICLES):
+                agent_module.create_vehicle(random.choice(roads))
+    
+    process_sqs_messages(SQS_QUEUE_TRAFFIC_UPDATES, process_message)
 
     while True:
         agent_module.update_all()
