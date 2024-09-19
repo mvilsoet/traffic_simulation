@@ -1,4 +1,5 @@
 import json
+import random
 from sqsUtility import send_sqs_message, process_sqs_messages
 
 # Load configuration
@@ -8,8 +9,6 @@ with open('config.json', 'r') as config_file:
 # Parameters from config
 DEFAULT_TRAFFIC_LIGHT_CYCLE = CONFIG['traffic_light']['default_cycle']
 DEFAULT_ROAD_BLOCKAGE_DURATION = CONFIG['road_blockage']['default_duration']
-INITIAL_INTERSECTION = CONFIG['traffic_light']['initial_intersection']
-INITIAL_BLOCKED_ROAD = CONFIG['road_blockage']['initial_blocked_road']
 SQS_QUEUE_VEHICLE_UPDATES = CONFIG['sqs']['queue_vehicle_updates']
 SQS_QUEUE_TRAFFIC_UPDATES = CONFIG['sqs']['queue_traffic_updates']
 
@@ -81,8 +80,20 @@ class TrafficControlSystem:
 
 if __name__ == "__main__":
     traffic_system = TrafficControlSystem()
-    traffic_system.add_traffic_light(INITIAL_INTERSECTION)
-    traffic_system.create_road_blockage(INITIAL_BLOCKED_ROAD)
+
+    # Wait for road network update
+    def process_message(message):
+        if message['type'] == 'road_network_update':
+            roads = list(message['roads'].keys())
+            # Add traffic lights to random intersections
+            for _ in range(5):  # Add 5 random traffic lights
+                intersection = random.choice(roads)
+                traffic_system.add_traffic_light(intersection)
+            # Create a road blockage on a random road
+            blocked_road = random.choice(roads)
+            traffic_system.create_road_blockage(blocked_road)
+    
+    process_sqs_messages(SQS_QUEUE_TRAFFIC_UPDATES, process_message)
 
     while True:
         traffic_system.update_all()
