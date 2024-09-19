@@ -1,6 +1,10 @@
 import time
 import json
+import logging
 from sqsUtility import send_sqs_message, process_sqs_messages
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Load configuration
 with open('config.json', 'r') as config_file:
@@ -28,6 +32,7 @@ class SimulationCore:
                     self.add_road(f"H{i}-{j}", (i, j), (i+1, j), 60)
                 if j < GRID_HEIGHT - 1:
                     self.add_road(f"V{i}-{j}", (i, j), (i, j+1), 60)
+        logging.info(f"Initialized road network with {len(self.road_network)} roads")
 
     def add_road(self, road_id, start_node, end_node, speed_limit):
         self.road_network[road_id] = {
@@ -49,7 +54,7 @@ class SimulationCore:
                 }
                 send_sqs_message(SQS_QUEUE_TRAFFIC_UPDATES, response)
             elif 'vehicle_id' in message:
-                print(f"Vehicle {message['vehicle_id']} update: Road {message['current_road']}, Position {message['position']}")
+                logging.info(f"Vehicle {message['vehicle_id']} update: Road {message['current_road']}, Position {message['position']}")
 
         process_sqs_messages(SQS_QUEUE_VEHICLE_UPDATES, process_message)
 
@@ -73,6 +78,7 @@ class SimulationCore:
             'roads': self.road_network
         }
         send_sqs_message(SQS_QUEUE_TRAFFIC_UPDATES, message)
+        logging.info(f"Sent road network update with {len(self.road_network)} roads")
 
 if __name__ == "__main__":
     sim = SimulationCore()
