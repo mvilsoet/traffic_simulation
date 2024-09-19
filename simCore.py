@@ -3,14 +3,11 @@ import json
 import logging
 from sqsUtility import send_sqs_message, process_sqs_messages
 
-# Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Load configuration
 with open('config.json', 'r') as config_file:
     CONFIG = json.load(config_file)
 
-# Parameters from config
 SIMULATION_STEP = CONFIG['simulation']['step']
 DEFAULT_SIMULATION_DURATION = CONFIG['simulation']['duration']
 SQS_QUEUE_VEHICLE_UPDATES = CONFIG['sqs']['queue_vehicle_updates']
@@ -25,7 +22,6 @@ class SimulationCore:
         self.initialize_grid_roads()
 
     def initialize_grid_roads(self):
-        # Create a grid of roads
         for i in range(GRID_WIDTH):
             for j in range(GRID_HEIGHT):
                 if i < GRID_WIDTH - 1:
@@ -33,6 +29,7 @@ class SimulationCore:
                 if j < GRID_HEIGHT - 1:
                     self.add_road(f"V{i}-{j}", (i, j), (i, j+1), 60)
         logging.info(f"Initialized road network with {len(self.road_network)} roads")
+        self.send_road_network()
 
     def add_road(self, road_id, start_node, end_node, speed_limit):
         self.road_network[road_id] = {
@@ -59,9 +56,6 @@ class SimulationCore:
         process_sqs_messages(SQS_QUEUE_VEHICLE_UPDATES, process_message)
 
     def run(self, duration=DEFAULT_SIMULATION_DURATION):
-        # Send initial road network information
-        self.send_road_network()
-
         start_time = time.time()
         while time.time() - start_time < duration:
             self.update()
