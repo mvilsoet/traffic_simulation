@@ -41,6 +41,7 @@ class VisualizationModule:
             elif message['type'] == 'road_blockage_update':
                 self.update_queue.put(('road_blockage', message))
             elif message['type'] == 'road_network_update':
+                print("UPDATE NETWORK: ", message)
                 self.update_queue.put(('road_network', message))
                 logging.info(f"Received road network update with {len(message['roads'])} roads")
 
