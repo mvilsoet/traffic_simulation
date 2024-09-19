@@ -46,15 +46,6 @@ def get_queue_url(queue_name):
             raise
     return queue_urls[queue_name]
 
-def refresh_queue_url(queue_name):
-    try:
-        response = sqs_client.get_queue_url(QueueName=queue_name)
-        queue_urls[queue_name] = response['QueueUrl']
-        logging.info(f"Refreshed URL for queue: {queue_name}")
-    except Exception as e:
-        logging.error(f"Error refreshing queue URL for {queue_name}: {str(e)}")
-        raise
-
 def send_sqs_message(queue_name, message):
     try:
         queue_url = get_queue_url(queue_name)
@@ -64,9 +55,6 @@ def send_sqs_message(queue_name, message):
         )
         logging.info(f"Message sent successfully to queue: {queue_name}")
         return response
-    except sqs_client.exceptions.QueueDoesNotExist:
-        refresh_queue_url(queue_name)
-        return send_sqs_message(queue_name, message)
     except Exception as e:
         logging.error(f"Error sending message to queue {queue_name}: {str(e)}")
         raise
@@ -82,9 +70,6 @@ def receive_sqs_messages(queue_name, max_messages=10, wait_time=20):
         messages = response.get('Messages', [])
         logging.info(f"Received {len(messages)} messages from queue: {queue_name}")
         return messages
-    except sqs_client.exceptions.QueueDoesNotExist:
-        refresh_queue_url(queue_name)
-        return receive_sqs_messages(queue_name, max_messages, wait_time)
     except Exception as e:
         logging.error(f"Error receiving messages from queue {queue_name}: {str(e)}")
         raise
@@ -97,39 +82,23 @@ def delete_sqs_message(queue_name, receipt_handle):
             ReceiptHandle=receipt_handle
         )
         logging.info(f"Message deleted successfully from queue: {queue_name}")
-    except sqs_client.exceptions.QueueDoesNotExist:
-        refresh_queue_url(queue_name)
-        delete_sqs_message(queue_name, receipt_handle)
     except Exception as e:
         logging.error(f"Error deleting message from queue {queue_name}: {str(e)}")
         raise
 
-def process_sqs_messages(queue_name, callback):
-    while True:
+def process_sqs_messages(queue_name, callback, max_messages=10, wait_time=20):
+    messages = receive_sqs_messages(queue_name, max_messages, wait_time)
+    for message in messages:
         try:
-            messages = receive_sqs_messages(queue_name)
-            for message in messages:
-                body = json.loads(message['Body'])
-                callback(body)
-                delete_sqs_message(queue_name, message['ReceiptHandle'])
+            body = json.loads(message['Body'])
+            callback(body)
+            delete_sqs_message(queue_name, message['ReceiptHandle'])
+        except json.JSONDecodeError as e:
+            logging.error(f"Error decoding message: {str(e)}")
+            logging.error(f"Raw message content: {message['Body']}")
         except Exception as e:
-            logging.error(f"Error processing messages from queue {queue_name}: {str(e)}")
-            time.sleep(5)
+            logging.error(f"Error processing message: {str(e)}")
 
 # Example usage and testing
 if __name__ == "__main__":
-    try:
-        # Test sending a message
-        send_sqs_message(SQS_QUEUE_VEHICLE_UPDATES, {
-            'vehicle_id': 1,
-            'position': 100,
-            'road': 'R1'
-        })
-
-        # Test receiving and processing messages
-        def print_message(message):
-            print(f"Received message: {message}")
-        
-        process_sqs_messages(SQS_QUEUE_VEHICLE_UPDATES, print_message)
-    except Exception as e:
-        logging.error(f"An error occurred during testing: {str(e)}")
+    pass
