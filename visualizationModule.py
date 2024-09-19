@@ -23,7 +23,7 @@ class VisualizationModule:
         self.vehicles = {}
         self.traffic_lights = {}
         self.road_blockages = {}
-        self.roads = set()
+        self.roads = {}
         self.update_queue = queue.Queue()
 
     def process_messages(self):
@@ -36,8 +36,8 @@ class VisualizationModule:
                 self.update_queue.put(('traffic_light', message))
             elif message['type'] == 'road_blockage_update':
                 self.update_queue.put(('road_blockage', message))
-            elif message['type'] == 'road_info_response':
-                self.update_queue.put(('road_info', message))
+            elif message['type'] == 'road_network_update':
+                self.update_queue.put(('road_network', message))
 
         while True:
             process_sqs_messages(SQS_QUEUE_VEHICLE_UPDATES, process_vehicle_message)
@@ -48,7 +48,7 @@ class VisualizationModule:
             print("No roads available for creating a roadblock.")
             return
 
-        road_id = random.choice(list(self.roads))
+        road_id = random.choice(list(self.roads.keys()))
         message = {
             'type': 'create_road_blockage',
             'road_id': road_id,
@@ -63,7 +63,7 @@ class VisualizationModule:
 
         message = {
             'type': 'create_vehicle',
-            'start_road': random.choice(list(self.roads))
+            'start_road': random.choice(list(self.roads.keys()))
         }
         send_sqs_message(SQS_QUEUE_VEHICLE_UPDATES, message)
 
@@ -106,7 +106,6 @@ class VisualizationModule:
                 update_type, data = self.update_queue.get()
                 if update_type == 'vehicle':
                     self.vehicles[data['vehicle_id']] = (data['x'], data['y'])
-                    self.roads.add(data['current_road'])
                 elif update_type == 'traffic_light':
                     intersection_id = data['intersection_id']
                     x, y = divmod(hash(intersection_id), GRID_WIDTH)
@@ -118,9 +117,20 @@ class VisualizationModule:
                         self.road_blockages[road_id] = (x % GRID_WIDTH, y % GRID_HEIGHT)
                     elif road_id in self.road_blockages:
                         del self.road_blockages[road_id]
-                    self.roads.add(road_id)
-                elif update_type == 'road_info':
-                    self.roads.add(data['road_id'])
+                elif update_type == 'road_network':
+                    self.roads = data['roads']
+
+            road_traces = []
+            for road_id, road_info in self.roads.items():
+                start, end = road_info['start'], road_info['end']
+                road_traces.append(go.Scatter(
+                    x=[start[0], end[0]],
+                    y=[start[1], end[1]],
+                    mode='lines',
+                    line=dict(color='gray', width=1, dash='dot'),
+                    hoverinfo='none',
+                    showlegend=False
+                ))
 
             vehicle_trace = go.Scatter(
                 x=[x for x, y in self.vehicles.values()],
@@ -161,7 +171,7 @@ class VisualizationModule:
             )
 
             return {
-                'data': [vehicle_trace, traffic_light_trace, road_blockage_trace, border_trace],
+                'data': road_traces + [vehicle_trace, traffic_light_trace, road_blockage_trace, border_trace],
                 'layout': go.Layout(
                     xaxis=dict(range=[-1, GRID_WIDTH + 1], showgrid=False, zeroline=False),
                     yaxis=dict(range=[-1, GRID_HEIGHT + 1], showgrid=False, zeroline=False),
