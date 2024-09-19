@@ -44,7 +44,8 @@ class VisualizationModule:
                 print("UPDATE NETWORK: ", message)
                 self.update_queue.put(('road_network', message))
                 logging.info(f"Received road network update with {len(message['roads'])} roads")
-
+            else:
+                print("FAILED TO SORT: ", message)
         while True:
             process_sqs_messages(SQS_QUEUE_VEHICLE_UPDATES, process_vehicle_message)
             process_sqs_messages(SQS_QUEUE_TRAFFIC_UPDATES, process_traffic_message)
