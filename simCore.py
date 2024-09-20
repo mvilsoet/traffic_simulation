@@ -77,7 +77,7 @@ class SimCore:
             self.publish_event('SimulationTick', {'time': self.state.get('time', 0)})
             self.state['time'] = self.state.get('time', 0) + 1
             self.process_messages()
-            time.sleep(1)  # Adjust tick rate as needed
+            time.sleep(0.1)  # Adjust tick rate as needed
 
 if __name__ == "__main__":
     print("Starting SimCore...")

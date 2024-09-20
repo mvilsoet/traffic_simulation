@@ -60,7 +60,7 @@ def send_sqs_message(queue_name, message):
         logging.error(f"Error sending message to queue {queue_name}: {str(e)}")
         raise
 
-def receive_sqs_messages(queue_name, max_messages=10, wait_time=20):
+def receive_sqs_messages(queue_name, max_messages=50, wait_time=0):
     try:
         queue_url = get_queue_url(queue_name)
         response = sqs_client.receive_message(
@@ -87,7 +87,7 @@ def delete_sqs_message(queue_name, receipt_handle):
         logging.error(f"Error deleting message from queue {queue_name}: {str(e)}")
         raise
 
-def process_sqs_messages(queue_name, callback, max_messages=10, wait_time=20):
+def process_sqs_messages(queue_name, callback, max_messages=50, wait_time=0):
     messages = receive_sqs_messages(queue_name, max_messages, wait_time)
     for message in messages:
         try:
