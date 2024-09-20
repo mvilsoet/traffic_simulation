@@ -83,7 +83,8 @@ def generate_initial_state():
 
 def initialize_sqs_queues():
     # Load configuration from config.json
-    with open('config.json', 'r') as config_file:
+    config_file = os.path.join(os.path.dirname(__file__), '../../config/config.json')
+    with open(config_file, 'r') as config_file:
         CONFIG = json.load(config_file)
         QUEUES = CONFIG.get('QUEUES', [])
         AWS_REGION = CONFIG['aws']['region']

@@ -1,5 +1,6 @@
 # sqsUtility.py
 
+import os
 import boto3
 import json
 import logging
@@ -9,7 +10,8 @@ import uuid
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Load configuration from config.json
-with open('config.json', 'r') as config_file:
+config_file = os.path.join(os.path.dirname(__file__), '../../config/config.json')
+with open(config_file, 'r') as config_file:
     CONFIG = json.load(config_file)
     AWS_REGION = CONFIG['aws']['region']
     MAX_NUMBER_OF_MESSAGES = CONFIG.get('MAX_NUMBER_OF_MESSAGES', 10)

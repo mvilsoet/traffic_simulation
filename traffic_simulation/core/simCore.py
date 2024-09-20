@@ -1,14 +1,16 @@
 # SimCore.py
 
+import os
 import time
 import json
 import boto3
-import sqsUtility
+from traffic_simulation.utils import sqsUtility
 
 class SimCore:
     def __init__(self):
         # Load configuration
-        with open('config.json', 'r') as config_file:
+        config_file = os.path.join(os.path.dirname(__file__), '../../config/config.json')
+        with open(config_file, 'r') as config_file:
             CONFIG = json.load(config_file)
             self.QUEUES = CONFIG['QUEUES']
             self.SIMCORE_QUEUE = CONFIG.get('SIMCORE_QUEUE', 'SimulationEvents')

@@ -4,7 +4,7 @@ import json
 import time
 import pandas as pd
 import boto3
-import sqsUtility
+from traffic_simulation.utils import sqsUtility
 
 class AgentModule:
     def __init__(self):
@@ -12,7 +12,7 @@ class AgentModule:
         self.initialized = False
 
         # Load configuration
-        with open('config.json', 'r') as config_file:
+        config_path = os.path.join(os.path.dirname(__file__), '../../config/config.json')
             CONFIG = json.load(config_file)
             QUEUES = CONFIG.get('AGENT_MOD_QUEUES', ['SimulationEvents', 'SimCoreUpdates'])
             self.MAX_NUMBER_OF_MESSAGES = CONFIG.get('MAX_NUMBER_OF_MESSAGES', 10)
