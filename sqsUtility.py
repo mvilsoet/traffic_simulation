@@ -6,22 +6,16 @@ import time
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Load configuration
-try:
-    with open('config.json', 'r') as config_file:
-        CONFIG = json.load(config_file)
-except FileNotFoundError:
-    logging.error("config.json file not found")
-    raise
-except json.JSONDecodeError:
-    logging.error("Error parsing config.json")
-    raise
+# Load configuration from the config.json file
+with open('config.json', 'r') as config_file:
+    CONFIG = json.load(config_file)
+    AWS_REGION = CONFIG['aws']['region']
+    SQS_QUEUE_VEHICLE_UPDATES = CONFIG['sqs']['queue_vehicle_updates']
+    SQS_QUEUE_TRAFFIC_UPDATES = CONFIG['sqs']['queue_traffic_updates']
+    MAX_NUMBER_OF_MESSAGES = CONFIG.get('sqs', {}).get('max_number_of_messages', 50)
+    WAIT_TIME_SECONDS = CONFIG.get('sqs', {}).get('wait_time_seconds', 0)  
 
 # AWS Configuration
-AWS_REGION = CONFIG['aws']['region']
-SQS_QUEUE_VEHICLE_UPDATES = CONFIG['sqs']['queue_vehicle_updates']
-SQS_QUEUE_TRAFFIC_UPDATES = CONFIG['sqs']['queue_traffic_updates']
-
 try:
     sqs_client = boto3.client('sqs', region_name=AWS_REGION)
     logging.info(f"SQS client created for region {AWS_REGION}")
@@ -33,6 +27,7 @@ except Exception as e:
 queue_urls = {}
 
 def get_queue_url(queue_name):
+    """Retrieve and cache SQS queue URLs"""
     if queue_name not in queue_urls:
         try:
             response = sqs_client.get_queue_url(QueueName=queue_name)
@@ -47,6 +42,7 @@ def get_queue_url(queue_name):
     return queue_urls[queue_name]
 
 def send_sqs_message(queue_name, message):
+    """Send a message to an SQS queue"""
     try:
         queue_url = get_queue_url(queue_name)
         message_body = json.dumps(message)
@@ -60,12 +56,13 @@ def send_sqs_message(queue_name, message):
         logging.error(f"Error sending message to queue {queue_name}: {str(e)}")
         raise
 
-def receive_sqs_messages(queue_name, max_messages=50, wait_time=0):
+def receive_sqs_messages(queue_name, max_number_of_messages=MAX_NUMBER_OF_MESSAGES, wait_time=WAIT_TIME_SECONDS):
+    """Receive messages from an SQS queue"""
     try:
         queue_url = get_queue_url(queue_name)
         response = sqs_client.receive_message(
             QueueUrl=queue_url,
-            MaxNumberOfMessages=max_messages,
+            MaxNumberOfMessages=max_number_of_messages,
             WaitTimeSeconds=wait_time
         )
         messages = response.get('Messages', [])
@@ -76,6 +73,7 @@ def receive_sqs_messages(queue_name, max_messages=50, wait_time=0):
         raise
 
 def delete_sqs_message(queue_name, receipt_handle):
+    """Delete a message from an SQS queue"""
     try:
         queue_url = get_queue_url(queue_name)
         sqs_client.delete_message(
@@ -87,8 +85,9 @@ def delete_sqs_message(queue_name, receipt_handle):
         logging.error(f"Error deleting message from queue {queue_name}: {str(e)}")
         raise
 
-def process_sqs_messages(queue_name, callback, max_messages=50, wait_time=0):
-    messages = receive_sqs_messages(queue_name, max_messages, wait_time)
+def process_sqs_messages(queue_name, callback, max_number_of_messages=MAX_NUMBER_OF_MESSAGES, wait_time=WAIT_TIME_SECONDS):
+    """Process messages from an SQS queue and execute a callback function"""
+    messages = receive_sqs_messages(queue_name, max_number_of_messages, wait_time)
     for message in messages:
         try:
             body = json.loads(message['Body'])
@@ -102,28 +101,4 @@ def process_sqs_messages(queue_name, callback, max_messages=50, wait_time=0):
 
 
 if __name__ == "__main__":
-    # print("Testing SQS Utility...")
-    # try:
-    #     # Test queue URL retrieval
-    #     test_queue_name = SQS_QUEUE_VEHICLE_UPDATES
-    #     queue_url = get_queue_url(test_queue_name)
-    #     print(f"Successfully retrieved URL for queue: {test_queue_name}")
-
-    #     # Test message sending
-    #     test_message = {"type": "test", "data": {"message": "This is a test"}}
-    #     response = send_sqs_message(test_queue_name, test_message)
-    #     print(f"Test message sent. MessageId: {response['MessageId']}")
-
-    #     # Test message receiving and deletion
-    #     messages = receive_sqs_messages(test_queue_name, max_messages=1, wait_time=5)
-    #     if messages:
-    #         print(f"Received test message: {messages[0]['Body']}")
-    #         delete_sqs_message(test_queue_name, messages[0]['ReceiptHandle'])
-    #         print("Test message deleted from queue.")
-    #     else:
-    #         print("No messages received. This is expected if the queue was empty.")
-
-    #     print("SQS Utility test completed successfully.")
-    # except Exception as e:
-    #     print(f"Error during SQS Utility test: {str(e)}")
     pass

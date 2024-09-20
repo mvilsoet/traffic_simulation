@@ -9,6 +9,16 @@ import plotly.graph_objs as go
 from collections import deque
 import threading
 
+# Load configuration from config.json
+with open('config.json', 'r') as config_file:
+    CONFIG = json.load(config_file)
+    QUEUES = CONFIG.get('VIZ_MOD_QUEUES', ['SimulationEvents', 'VehicleEvents.fifo', 'TrafficControlEvents.fifo'])
+    MAX_NUMBER_OF_MESSAGES = CONFIG.get('MAX_NUMBER_OF_MESSAGES', 100)  # Max number of messages to receive from SQS in one call
+    WAIT_TIME_SECONDS = CONFIG.get('WAIT_TIME_SECONDS', 0)  # SQS message wait time
+    MAXLEN = CONFIG.get('MAXLEN', 1000)  # Max number of updates to store in the queue
+    INTERVAL = CONFIG.get('INTERVAL', 2000)  # Interval for Dash graph updates (in milliseconds)
+    DASH_PORT = CONFIG.get('DASH_PORT', 8050)  # Port for Dash server
+
 class VisualizationModule:
     def __init__(self):
         self.state = {
@@ -18,13 +28,12 @@ class VisualizationModule:
         }
         self.sqs = boto3.client('sqs')
         self.queue_urls = {}
-        self.update_queue = deque(maxlen=100)  # Store up to 100 updates
+        self.update_queue = deque(maxlen=MAXLEN)  # Store up to `maxlen` updates
         self.running = True
 
     def initialize(self):
         # Get queue URLs
-        queues = ['SimulationEvents', 'VehicleEvents.fifo', 'TrafficControlEvents.fifo']
-        for queue in queues:
+        for queue in QUEUES:
             try:
                 response = self.sqs.get_queue_url(QueueName=queue)
                 self.queue_urls[queue] = response['QueueUrl']
@@ -37,8 +46,8 @@ class VisualizationModule:
                 try:
                     response = self.sqs.receive_message(
                         QueueUrl=queue_url,
-                        MaxNumberOfMessages=10,
-                        WaitTimeSeconds=1
+                        MaxNumberOfMessages=MAX_NUMBER_OF_MESSAGES,  # Retrieve up to `MAX_NUMBER_OF_MESSAGES`
+                        WaitTimeSeconds=WAIT_TIME_SECONDS  # Wait for `WAIT_TIME_SECONDS`
                     )
 
                     messages = response.get('Messages', [])
@@ -61,7 +70,7 @@ class VisualizationModule:
             dcc.Graph(id='live-graph', animate=True),
             dcc.Interval(
                 id='graph-update',
-                interval=1000,  # in milliseconds
+                interval=INTERVAL,  # Set the update interval from the global parameter
                 n_intervals=0
             )
         ])
@@ -141,7 +150,7 @@ class VisualizationModule:
 
         # Create and run the Dash app in the main thread
         app = self.create_dash_app()
-        app.run_server(debug=False, host='0.0.0.0', port=8050)
+        app.run_server(debug=False, host='0.0.0.0', port=DASH_PORT)  # Use configured port
 
         # When the Dash app stops, stop the message processing
         self.running = False

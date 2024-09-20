@@ -3,6 +3,16 @@ import json
 import random
 from botocore.exceptions import ClientError
 
+# Load configuration from config.json
+with open('config.json', 'r') as config_file:
+    CONFIG = json.load(config_file)
+    QUEUES = CONFIG.get('TRAFFIC_MOD_QUEUES', ['TrafficControlEvents.fifo', 'SimulationEvents'])  # List of SQS queues to use
+    MAX_NUMBER_OF_MESSAGES = CONFIG.get('MAX_NUMBER_OF_MESSAGES', 100)  # Max number of messages to receive from SQS
+    WAIT_TIME_SECONDS = CONFIG.get('WAIT_TIME_SECONDS', 0)  # SQS message wait time
+    TRAFFIC_LIGHT_CHANGE_PROBABILITY = CONFIG.get('TRAFFIC_LIGHT_CHANGE_PROBABILITY', 0.1)  # Probability of changing a traffic light state per tick
+    ROAD_BLOCKAGE_CREATION_PROBABILITY = CONFIG.get('ROAD_BLOCKAGE_CREATION_PROBABILITY', 0.3)  # Probability of creating a new road blockage
+    BLOCKAGE_DURATION_RANGE = CONFIG.get('BLOCKAGE_DURATION_RANGE', [10, 50])  # Range of duration for road blockages
+
 class TrafficControlModule:
     def __init__(self):
         self.traffic_lights = {}
@@ -11,9 +21,8 @@ class TrafficControlModule:
         self.queue_urls = {}
 
     def initialize(self):
-        # Get queue URLs
-        queues = ['TrafficControlEvents.fifo', 'SimulationEvents']
-        for queue in queues:
+        # Get queue URLs from config
+        for queue in QUEUES:
             try:
                 response = self.sqs.get_queue_url(QueueName=queue)
                 self.queue_urls[queue] = response['QueueUrl']
@@ -24,8 +33,8 @@ class TrafficControlModule:
         try:
             response = self.sqs.receive_message(
                 QueueUrl=self.queue_urls['SimulationEvents'],
-                MaxNumberOfMessages=10,
-                WaitTimeSeconds=1
+                MaxNumberOfMessages=MAX_NUMBER_OF_MESSAGES,  # Use configured max messages
+                WaitTimeSeconds=WAIT_TIME_SECONDS  # Use configured wait time
             )
 
             messages = response.get('Messages', [])
@@ -45,7 +54,7 @@ class TrafficControlModule:
     def process_tick(self, tick_data):
         # Update traffic lights
         for light_id, light in self.traffic_lights.items():
-            if random.random() < 0.1:  # 10% chance to change light
+            if random.random() < TRAFFIC_LIGHT_CHANGE_PROBABILITY:  # Use configured probability
                 new_state = 'green' if light['state'] == 'red' else 'red'
                 self.traffic_lights[light_id]['state'] = new_state
                 self.publish_event('TrafficLightChanged', {
@@ -63,11 +72,11 @@ class TrafficControlModule:
                 })
 
         # Randomly create new road blockages
-        if random.random() < 0.05:  # 5% chance to create a new blockage
+        if random.random() < ROAD_BLOCKAGE_CREATION_PROBABILITY:  # Use configured probability
             blockage_id = f"blockage_{len(self.road_blockages)}"
             self.road_blockages[blockage_id] = {
                 'location': (random.random() * 100, random.random() * 100),
-                'duration': random.randint(10, 50)
+                'duration': random.randint(*BLOCKAGE_DURATION_RANGE)  # Use configured range
             }
             self.publish_event('RoadBlockageCreated', {
                 'blockage_id': blockage_id,

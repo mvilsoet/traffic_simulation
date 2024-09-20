@@ -5,19 +5,29 @@ from botocore.exceptions import ClientError
 
 class SimCore:
     def __init__(self):
+        with open('config.json', 'r') as config_file:
+            CONFIG = json.load(config_file)
+            self.QUEUES = CONFIG['QUEUES']
+            self.TICK_INTERVAL = CONFIG.get('TICK_INTERVAL', 0.1)  # Default to 0.1 seconds
+            self.MAX_NUMBER_OF_MESSAGES = CONFIG.get('MAX_NUMBER_OF_MESSAGES', 10)  # Default to 10
+            self.WAIT_TIME_SECONDS = CONFIG.get('WAIT_TIME_SECONDS', 1)  # Default to 1 second
+            self.SIMCORE_QUEUE = CONFIG.get('SIMCORE_QUEUE', 'SimulationEvents')  # Default to SimulationEvents Queue
+    
+        # Simulation state
         self.state = {
             'roads': {},
             'vehicles': {},
             'traffic_lights': {},
             'road_blockages': {}
         }
+
+        # Initialize SQS client
         self.sqs = boto3.client('sqs')
         self.queue_urls = {}
 
     def initialize(self):
-        # Get queue URLs
-        queues = ['VehicleEvents.fifo', 'TrafficControlEvents.fifo', 'SimulationEvents']
-        for queue in queues:
+        # Get queue URLs from the config file
+        for queue in self.QUEUES:
             try:
                 response = self.sqs.get_queue_url(QueueName=queue)
                 self.queue_urls[queue] = response['QueueUrl']
@@ -29,8 +39,8 @@ class SimCore:
             try:
                 response = self.sqs.receive_message(
                     QueueUrl=queue_url,
-                    MaxNumberOfMessages=10,
-                    WaitTimeSeconds=1
+                    MaxNumberOfMessages=self.MAX_NUMBER_OF_MESSAGES,  # Use value from config
+                    WaitTimeSeconds=self.WAIT_TIME_SECONDS  # Use value from config
                 )
 
                 messages = response.get('Messages', [])
@@ -65,7 +75,7 @@ class SimCore:
         message_body = json.dumps({'type': event_type, 'data': data})
         try:
             self.sqs.send_message(
-                QueueUrl=self.queue_urls['SimulationEvents'],
+                QueueUrl=self.queue_urls[self.SIMCORE_QUEUE],
                 MessageBody=message_body
             )
         except ClientError as e:
@@ -78,7 +88,7 @@ class SimCore:
             self.state['time'] = self.state.get('time', 0) + 1
             print("tick: ", self.state['time'])
             self.process_messages()
-            time.sleep(0.1)  # Adjust tick rate as needed
+            time.sleep(self.TICK_INTERVAL)  # Use tick interval from config
 
 if __name__ == "__main__":
     print("Starting SimCore...")

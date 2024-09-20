@@ -3,6 +3,13 @@ import json
 import random
 from botocore.exceptions import ClientError
 
+# Load configuration from config.json
+with open('config.json', 'r') as config_file:
+    CONFIG = json.load(config_file)
+    QUEUES = CONFIG.get('AGENT_MOD_QUEUES', ['VehicleEvents.fifo', 'SimulationEvents'])  # SQS queue names
+    MAX_NUMBER_OF_MESSAGES = CONFIG.get('MAX_NUMBER_OF_MESSAGES', 10)  # Max number of messages to receive from SQS
+    WAIT_TIME_SECONDS = CONFIG.get('WAIT_TIME_SECONDS', 1)  # Wait time for receiving messages from SQS
+
 class AgentModule:
     def __init__(self):
         self.vehicles = {}
@@ -10,9 +17,8 @@ class AgentModule:
         self.queue_urls = {}
 
     def initialize(self):
-        # Get queue URLs
-        queues = ['VehicleEvents.fifo', 'SimulationEvents']
-        for queue in queues:
+        # Get queue URLs from config
+        for queue in QUEUES:
             try:
                 response = self.sqs.get_queue_url(QueueName=queue)
                 self.queue_urls[queue] = response['QueueUrl']
@@ -23,8 +29,8 @@ class AgentModule:
         try:
             response = self.sqs.receive_message(
                 QueueUrl=self.queue_urls['SimulationEvents'],
-                MaxNumberOfMessages=10,
-                WaitTimeSeconds=1
+                MaxNumberOfMessages=MAX_NUMBER_OF_MESSAGES,  # Use config for max messages
+                WaitTimeSeconds=WAIT_TIME_SECONDS  # Use config for wait time
             )
 
             messages = response.get('Messages', [])

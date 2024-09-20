@@ -1,0 +1,23 @@
+{
+  "MAX_NUMBER_OF_MESSAGES": 100,
+  "WAIT_TIME_SECONDS": 0,
+
+  "AWS_REGION": "us-east-1",
+  "SQS_QUEUE_VEHICLE_UPDATES": "VehicleEvents.fifo",
+  "SQS_QUEUE_TRAFFIC_UPDATES": "TrafficControlEvents.fifo",
+  
+  "SIMCORE_QUEUE": "SimulationEvents",
+  "TICK_INTERVAL": 0.1,
+  
+  "AGENT_MOD_QUEUES": ["VehicleEvents.fifo", "SimulationEvents"],
+  
+  "TRAFFIC_MOD_QUEUES": ["TrafficControlEvents.fifo", "SimulationEvents"],
+  "TRAFFIC_LIGHT_CHANGE_PROBABILITY": 0.1,
+  "ROAD_BLOCKAGE_CREATION_PROBABILITY": 0.3,
+  "BLOCKAGE_DURATION_RANGE": [10, 50],
+  
+  "VIZ_MOD_QUEUES": ["SimulationEvents", "VehicleEvents.fifo", "TrafficControlEvents.fifo"],
+  "MAXLEN": 1000,
+  "INTERVAL": 2000,
+  "DASH_PORT": 8050
+}
