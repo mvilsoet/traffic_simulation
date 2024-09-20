@@ -49,11 +49,12 @@ def get_queue_url(queue_name):
 def send_sqs_message(queue_name, message):
     try:
         queue_url = get_queue_url(queue_name)
+        message_body = json.dumps(message)
         response = sqs_client.send_message(
             QueueUrl=queue_url,
-            MessageBody=json.dumps(message)
+            MessageBody=message_body
         )
-        logging.info(f"Message sent successfully to queue: {queue_name}")
+        logging.info(f"Message sent to queue {queue_name}: {message_body}")
         return response
     except Exception as e:
         logging.error(f"Error sending message to queue {queue_name}: {str(e)}")
