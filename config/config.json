@@ -9,7 +9,7 @@
   "SIMCORE_UPDATES_QUEUE": "SimCoreUpdates",
   "MAX_NUMBER_OF_MESSAGES": 10,
   "WAIT_TIME_SECONDS": 0,
-  "TICK_INTERVAL": 0,
+  "TICK_INTERVAL": 1,
   "sqs": {
       "max_number_of_messages": 10,
       "wait_time_seconds": 0
