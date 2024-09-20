@@ -91,7 +91,8 @@ class VisualizationModule:
                 y=[v['position'][1] for v in self.state['vehicles'].values()],
                 mode='markers',
                 name='Vehicles',
-                marker=dict(color='blue', size=10, symbol='circle')
+                marker=dict(color='blue', size=10, symbol='circle'),
+                showlegend=True  # Ensure legend is updated
             )
 
             traffic_light_trace = go.Scatter(
@@ -103,7 +104,8 @@ class VisualizationModule:
                     color=['green' if t['state'] == 'green' else 'red' for t in self.state['traffic_lights'].values()],
                     size=15,
                     symbol='square'
-                )
+                ),
+                showlegend=True  # Ensure legend is updated
             )
 
             road_blockage_trace = go.Scatter(
@@ -111,7 +113,8 @@ class VisualizationModule:
                 y=[b['position'][1] for b in self.state['road_blockages'].values()],
                 mode='markers',
                 name='Road Blockages',
-                marker=dict(color='orange', size=12, symbol='triangle-up')
+                marker=dict(color='orange', size=12, symbol='triangle-up'),
+                showlegend=True  # Ensure legend is updated
             )
 
             return {
@@ -119,7 +122,8 @@ class VisualizationModule:
                 'layout': go.Layout(
                     xaxis=dict(range=[0, 100]),
                     yaxis=dict(range=[0, 100]),
-                    title='Traffic Simulation'
+                    title='Traffic Simulation',
+                    showlegend=True  # Ensure the legend is displayed
                 )
             }
 
