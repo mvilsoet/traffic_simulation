@@ -76,6 +76,7 @@ class SimCore:
         while True:
             self.publish_event('SimulationTick', {'time': self.state.get('time', 0)})
             self.state['time'] = self.state.get('time', 0) + 1
+            print("tick: ", self.state['time'])
             self.process_messages()
             time.sleep(0.1)  # Adjust tick rate as needed
 
