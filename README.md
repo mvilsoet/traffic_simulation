@@ -13,9 +13,10 @@ traffic_simulation/
 ├── visualizationModule.py
 ├── sqsUtility.py
 ├── config.json
-├── setup_sqs_queues.sh
-├── start_simulation.sh
-└── README.md
+├── init_aws.py
+├── run_simulation.sh
+├── README.md
+└── requirements.txt
 ```
 
 - `simCore.py`: Central simulation controller
@@ -24,124 +25,125 @@ traffic_simulation/
 - `visualizationModule.py`: Handles the visualization of the simulation
 - `sqsUtility.py`: Utility functions for interacting with Amazon SQS
 - `config.json`: Configuration file for the simulation
-- `setup_sqs_queues.sh`: Script to set up required SQS queues
-- `start_simulation.sh`: Script to start all simulation modules
+- `init_aws.py`: Script that initializes S3 bucket and creates SQS queues
+- `run_simulation.sh`: Script to start all simulation modules
+- `requirements.txt`: Python dependencies
 
 ## Component Overview
 
 ### SimCore (simCore.py)
-- Maintains the authoritative state of the entire simulation
-- Processes events from all queues and updates the simulation state
-- Publishes SimulationTick events to drive the simulation forward
+
+SimCore acts as the central simulation controller. It is responsible for:
+
+- Initialization: Sending an Initialize message containing S3 links to the initial state data (roads, intersections, vehicles) to the SimulationEvents queue.
+- Simulation Ticks: Emitting SimulationTick events at regular intervals to synchronize other modules.
+- State Management: Receiving updates from other modules via the SimCoreUpdates queue and updating the internal simulation state accordingly.
+- Global State Maintenance: Keeping track of the overall simulation state, including vehicle positions, traffic light states, and road blockages.
 
 ### AgentModule (agentModule.py)
-- Manages vehicles in the simulation
-- Processes SimulationTick events to update vehicle positions
-- Publishes VehicleCreated and VehicleMoved events
+
+The AgentModule manages the vehicles in the simulation. Its functionalities include:
+
+- Initialization: Listening for the Initialize message from SimCore and initializing its internal state by downloading vehicle data from S3.
+- Vehicle Updates: Upon receiving SimulationTick events, updating the positions of all vehicles based on their speed and road conditions.
+- Communication: Sending vehicle updates (new positions, statuses) to SimCore via the SimCoreUpdates queue after each tick.
+- Behavior Simulation: Simulating vehicle behaviors such as movement along roads and interactions with traffic lights and road blockages.
 
 ### TrafficModule (trafficModule.py)
-- Manages traffic lights and road blockages
-- Processes SimulationTick events to update traffic light states and road blockages
-- Publishes TrafficLightChanged, RoadBlockageCreated, and RoadBlockageRemoved events
+
+The TrafficModule manages traffic control elements, including traffic lights and road blockages:
+
+- Initialization: Listening for the Initialize message and setting up internal state by downloading traffic light and road data from S3.
+- Traffic Control Updates: Updating traffic light states and road blockages on each SimulationTick.
+- Communication: Sending updates about traffic lights and road blockages to SimCore via the SimCoreUpdates queue.
+- Logic Implementation: Simulating the logic of traffic lights (e.g., cycle changes) and the occurrence and clearing of road blockages.
 
 ### VisualizationModule (visualizationModule.py)
-- Subscribes to all events to maintain a local view of the simulation state
-- Uses Dash and Plotly to create a real-time visualization of the simulation
+
+The VisualizationModule is responsible for rendering the simulation state visually:
+
+- Data Consumption: Listening to the SimulationEvents and SimCoreUpdates queues to receive the latest simulation state updates.
+- Real-Time Rendering: Updating the visual representation of the simulation in real-time based on received updates.
+- User Interface: Providing an interface (GUI or web-based) for users to observe the simulation.
+
+Note: The VisualizationModule is a placeholder and would need implementation based on the desired visualization technology.
 
 ### SQS Utility (sqsUtility.py)
-- Provides utility functions for interacting with Amazon SQS
-- Handles sending and receiving messages from SQS queues
+
+sqsUtility.py provides utility functions for interacting with Amazon SQS:
+
+- Queue Management: Retrieving and caching queue URLs.
+- Message Operations: Sending messages (single and batch), receiving messages, and deleting messages from queues.
+- FIFO Queue Handling: Managing FIFO queue specifics like MessageGroupId and MessageDeduplicationId.
+- Error Handling: Handling exceptions and logging for robust operation.
 
 ## Communication Flow
 
-1. SimCore publishes SimulationTick events to the SimulationEvents queue.
-2. AgentModule and TrafficModule consume SimulationTick events:
-   - AgentModule updates vehicle positions and publishes VehicleMoved events to the VehicleEvents.fifo queue.
-   - TrafficModule updates traffic light states and road blockages, publishing events to the TrafficControlEvents.fifo queue.
-3. SimCore consumes events from all queues (VehicleEvents.fifo, TrafficControlEvents.fifo, SimulationEvents) and updates its internal state.
-4. SimCore publishes StateChanged events to the SimulationEvents queue after processing all updates.
-5. VisualizationModule consumes events from all queues to maintain its local view of the simulation state and update the visualization.
+1. Initialization:
+   - SimCore publishes an Initialize event to the SimulationEvents queue with S3 links to the initial state data.
+   - AgentModule and TrafficModule consume the Initialize event, download the necessary data from S3, and initialize their internal states.
 
-## Setup and Execution
+2. Simulation Ticks:
+   - SimCore emits SimulationTick events at regular intervals to the SimulationEvents queue.
+   - AgentModule and TrafficModule consume SimulationTick events and perform updates accordingly.
+
+3. Module Updates:
+   - After processing a tick:
+     - AgentModule sends vehicle updates (e.g., positions) to SimCore via the SimCoreUpdates queue.
+     - TrafficModule sends traffic light and road blockage updates to SimCore via the SimCoreUpdates queue.
+
+4. State Update:
+   - SimCore consumes updates from the SimCoreUpdates queue and updates its internal simulation state.
+
+5. Visualization:
+   - VisualizationModule consumes events from the SimulationEvents and SimCoreUpdates queues to maintain an up-to-date view of the simulation and update the visualization accordingly.
+
+## Installation
 
 ### Prerequisites
+
 - Python 3.7+
-- AWS CLI installed and configured with appropriate credentials
-- Required Python packages: boto3, dash, plotly
+- AWS Account with access to SQS and S3 services
+- AWS CLI configured with appropriate credentials
 
-### Setup
-1. Clone the repository:
-   ```
-   git clone https://github.com/yourusername/traffic_simulation.git
-   cd traffic_simulation
-   ```
+### Dependencies
 
-2. Install required Python packages:
-   ```
-   pip install boto3 dash plotly
-   ```
+Install the required Python packages using pip:
 
-3. Set up SQS queues:
-   ```
-   chmod +x setup_sqs_queues.sh
-   ./setup_sqs_queues.sh
-   ```
-
-### Execution
-To start the simulation:
-```
-chmod +x start_simulation.sh
-./start_simulation.sh
+```bash
+pip install -r requirements.txt
 ```
 
-This will start all four Python scripts (simCore.py, agentModule.py, trafficModule.py, visualizationModule.py) in parallel.
+### AWS Setup
 
-## Configuration
+Before running the simulation, set up the necessary AWS resources.
 
-Ensure `config.json` contains correct settings for all modules, including SQS queue names and AWS region. All modules should load and use this configuration.
+1. Configure AWS Credentials
 
-## Ensuring Proper Functionality
+Ensure that your AWS credentials are configured. Run:
 
-1. AWS Setup:
-   - Ensure AWS CLI is installed and configured with appropriate credentials.
-   - Run `setup_sqs_queues.sh` to create the necessary queues before first run.
+```bash
+aws configure
+```
 
-2. Python Environment:
-   - Ensure all required Python packages are installed (boto3, dash, plotly).
-   - Consider using a virtual environment for the project.
+2. Initialize AWS Resources
 
-3. Consistent Event Structures:
-   - Ensure all modules use consistent event structures when publishing and consuming events.
+Run the init_aws.py script to create the SQS queues and upload initial graph to S3 bucket:
 
-4. Error Handling and Logging:
-   - Implement robust error handling and logging in all modules to catch and report any issues.
+```bash
+python init_aws.py
+```
 
-5. Testing:
-   - Implement unit tests for individual components and integration tests for the entire system.
-   - Test various scenarios, including edge cases and high-load situations.
+## Usage
 
-## Monitoring and Maintenance
+### Running the Simulation
 
-- Monitor the AWS SQS queues during operation to ensure messages are being processed correctly and that no queue is becoming backlogged.
-- Implement a graceful shutdown procedure to ensure all components can stop cleanly when the simulation is terminated.
+Use the run_simulation.sh script to start all simulation modules:
 
-## Future Improvements
-
-- Implement more complex traffic rules and vehicle behaviors
-- Add support for different types of vehicles (cars, buses, bicycles)
-- Enhance visualization with more detailed graphics and interactivity
-- Implement machine learning algorithms for traffic optimization
-
-## Contributing
-
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct, and the process for submitting pull requests to us.
+```bash
+./run_simulation.sh
+```
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details
-
-## Acknowledgments
-
-- Thanks to all contributors who have helped shape this project
-- Inspired by real-world traffic simulation systems and urban planning tools
-
+This project is licensed under the MIT License - see the LICENSE.md file for details.
