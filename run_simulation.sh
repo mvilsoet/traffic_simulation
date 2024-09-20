@@ -16,7 +16,7 @@ trap shutdown SIGINT
 
 # Start SimCore
 echo "Starting SimCore..."
-python SimCore.py &
+python3 simCore.py &
 SIMCORE_PID=$!
 
 # Give SimCore a moment to initialize and send the Initialize message
@@ -24,12 +24,12 @@ sleep 2
 
 # Start AgentModule
 echo "Starting AgentModule..."
-python AgentModule.py &
+python agentModule.py &
 AGENT_PID=$!
 
 # Start TrafficModule
 echo "Starting TrafficModule..."
-python TrafficModule.py &
+python trafficModule.py &
 TRAFFIC_PID=$!
 
 # Wait for all background processes to finish
