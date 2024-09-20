@@ -24,12 +24,12 @@ sleep 2
 
 # Start AgentModule
 echo "Starting AgentModule..."
-python agentModule.py &
+python3 agentModule.py &
 AGENT_PID=$!
 
 # Start TrafficModule
 echo "Starting TrafficModule..."
-python trafficModule.py &
+python3 trafficModule.py &
 TRAFFIC_PID=$!
 
 # Wait for all background processes to finish
