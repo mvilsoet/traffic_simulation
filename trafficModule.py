@@ -1,4 +1,3 @@
-import asyncio
 import boto3
 import json
 import random
@@ -11,7 +10,7 @@ class TrafficControlModule:
         self.sqs = boto3.client('sqs')
         self.queue_urls = {}
 
-    async def initialize(self):
+    def initialize(self):
         # Get queue URLs
         queues = ['TrafficControlEvents.fifo', 'SimulationEvents']
         for queue in queues:
@@ -21,38 +20,35 @@ class TrafficControlModule:
             except ClientError as e:
                 print(f"Error getting queue URL for {queue}: {e}")
 
-    async def process_messages(self):
-        while True:
-            try:
-                response = self.sqs.receive_message(
+    def process_messages(self):
+        try:
+            response = self.sqs.receive_message(
+                QueueUrl=self.queue_urls['SimulationEvents'],
+                MaxNumberOfMessages=10,
+                WaitTimeSeconds=1
+            )
+
+            messages = response.get('Messages', [])
+            for message in messages:
+                event = json.loads(message['Body'])
+                if event['type'] == 'SimulationTick':
+                    self.process_tick(event['data'])
+
+                # Delete the message from the queue
+                self.sqs.delete_message(
                     QueueUrl=self.queue_urls['SimulationEvents'],
-                    MaxNumberOfMessages=10,
-                    WaitTimeSeconds=20
+                    ReceiptHandle=message['ReceiptHandle']
                 )
+        except Exception as e:
+            print(f"Error processing messages: {e}")
 
-                messages = response.get('Messages', [])
-                for message in messages:
-                    event = json.loads(message['Body'])
-                    if event['type'] == 'SimulationTick':
-                        await self.process_tick(event['data'])
-
-                    # Delete the message from the queue
-                    self.sqs.delete_message(
-                        QueueUrl=self.queue_urls['SimulationEvents'],
-                        ReceiptHandle=message['ReceiptHandle']
-                    )
-            except Exception as e:
-                print(f"Error processing messages: {e}")
-
-            await asyncio.sleep(0.1)  # Short sleep to prevent tight looping
-
-    async def process_tick(self, tick_data):
+    def process_tick(self, tick_data):
         # Update traffic lights
         for light_id, light in self.traffic_lights.items():
             if random.random() < 0.1:  # 10% chance to change light
                 new_state = 'green' if light['state'] == 'red' else 'red'
                 self.traffic_lights[light_id]['state'] = new_state
-                await self.publish_event('TrafficLightChanged', {
+                self.publish_event('TrafficLightChanged', {
                     'light_id': light_id,
                     'state': new_state
                 })
@@ -62,7 +58,7 @@ class TrafficControlModule:
             blockage['duration'] -= 1
             if blockage['duration'] <= 0:
                 del self.road_blockages[blockage_id]
-                await self.publish_event('RoadBlockageRemoved', {
+                self.publish_event('RoadBlockageRemoved', {
                     'blockage_id': blockage_id
                 })
 
@@ -73,12 +69,12 @@ class TrafficControlModule:
                 'location': (random.random() * 100, random.random() * 100),
                 'duration': random.randint(10, 50)
             }
-            await self.publish_event('RoadBlockageCreated', {
+            self.publish_event('RoadBlockageCreated', {
                 'blockage_id': blockage_id,
                 'location': self.road_blockages[blockage_id]['location']
             })
 
-    async def publish_event(self, event_type, data):
+    def publish_event(self, event_type, data):
         message_body = json.dumps({'type': event_type, 'data': data})
         try:
             self.sqs.send_message(
@@ -89,32 +85,32 @@ class TrafficControlModule:
         except ClientError as e:
             print(f"Error publishing {event_type} event: {e}")
 
-    async def create_traffic_light(self, light_id, initial_state):
+    def create_traffic_light(self, light_id, initial_state):
         self.traffic_lights[light_id] = {'state': initial_state}
-        await self.publish_event('TrafficLightChanged', {
+        self.publish_event('TrafficLightChanged', {
             'light_id': light_id,
             'state': initial_state
         })
 
-async def main():
+    def run(self):
+        self.initialize()
+        
+        # Create some initial traffic lights
+        for i in range(5):
+            self.create_traffic_light(f"light_{i}", random.choice(['red', 'green']))
+        
+        # Start processing messages
+        while True:
+            self.process_messages()
+
+if __name__ == "__main__":
     print("Starting TrafficControlModule...")
     traffic_control = TrafficControlModule()
-    await traffic_control.initialize()
-    print("TrafficControlModule initialized. Creating initial traffic lights...")
-    
-    # Create some initial traffic lights
-    for i in range(5):
-        await traffic_control.create_traffic_light(f"light_{i}", random.choice(['red', 'green']))
-    print("5 initial traffic lights created. Starting to process messages...")
-    
     try:
-        await traffic_control.process_messages()
+        traffic_control.run()
     except KeyboardInterrupt:
         print("TrafficControlModule stopped by user.")
     except Exception as e:
         print(f"Error in TrafficControlModule: {e}")
     finally:
         print("TrafficControlModule shutting down.")
-
-if __name__ == "__main__":
-    asyncio.run(main())

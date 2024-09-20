@@ -1,6 +1,6 @@
-import asyncio
 import boto3
 import json
+import time
 from botocore.exceptions import ClientError
 
 class SimCore:
@@ -14,7 +14,7 @@ class SimCore:
         self.sqs = boto3.client('sqs')
         self.queue_urls = {}
 
-    async def initialize(self):
+    def initialize(self):
         # Get queue URLs
         queues = ['VehicleEvents.fifo', 'TrafficControlEvents.fifo', 'SimulationEvents']
         for queue in queues:
@@ -24,32 +24,29 @@ class SimCore:
             except ClientError as e:
                 print(f"Error getting queue URL for {queue}: {e}")
 
-    async def process_messages(self):
-        while True:
-            for queue_name, queue_url in self.queue_urls.items():
-                try:
-                    response = self.sqs.receive_message(
+    def process_messages(self):
+        for queue_name, queue_url in self.queue_urls.items():
+            try:
+                response = self.sqs.receive_message(
+                    QueueUrl=queue_url,
+                    MaxNumberOfMessages=10,
+                    WaitTimeSeconds=1
+                )
+
+                messages = response.get('Messages', [])
+                for message in messages:
+                    event = json.loads(message['Body'])
+                    self.process_event(event)
+
+                    # Delete the message from the queue
+                    self.sqs.delete_message(
                         QueueUrl=queue_url,
-                        MaxNumberOfMessages=10,
-                        WaitTimeSeconds=20
+                        ReceiptHandle=message['ReceiptHandle']
                     )
+            except Exception as e:
+                print(f"Error processing messages from {queue_name}: {e}")
 
-                    messages = response.get('Messages', [])
-                    for message in messages:
-                        event = json.loads(message['Body'])
-                        await self.process_event(event)
-
-                        # Delete the message from the queue
-                        self.sqs.delete_message(
-                            QueueUrl=queue_url,
-                            ReceiptHandle=message['ReceiptHandle']
-                        )
-                except Exception as e:
-                    print(f"Error processing messages from {queue_name}: {e}")
-
-            await asyncio.sleep(0.1)  # Short sleep to prevent tight looping
-
-    async def process_event(self, event):
+    def process_event(self, event):
         event_type = event['type']
 
         if event_type == 'VehicleMoved':
@@ -62,9 +59,9 @@ class SimCore:
             self.state['road_blockages'].pop(event['data']['blockage_id'], None)
 
         # Publish StateChanged event
-        await self.publish_event('StateChanged', self.state)
+        self.publish_event('StateChanged', self.state)
 
-    async def publish_event(self, event_type, data):
+    def publish_event(self, event_type, data):
         message_body = json.dumps({'type': event_type, 'data': data})
         try:
             self.sqs.send_message(
@@ -74,23 +71,22 @@ class SimCore:
         except ClientError as e:
             print(f"Error publishing {event_type} event: {e}")
 
-    async def run(self):
+    def run(self):
+        self.initialize()
         while True:
-            await self.publish_event('SimulationTick', {'time': self.state.get('time', 0)})
+            self.publish_event('SimulationTick', {'time': self.state.get('time', 0)})
             self.state['time'] = self.state.get('time', 0) + 1
-            await asyncio.sleep(1)  # Adjust tick rate as needed
-
-
-async def main():
-    print("Starting SimCore...")
-    sim_core = SimCore()
-    await sim_core.initialize()
-    print("SimCore initialized. Starting simulation...")
-    try:
-        await asyncio.gather(sim_core.run(), sim_core.process_messages())
-    except KeyboardInterrupt:
-        print("Simulation stopped by user.")
-    print("SimCore shutting down.")
+            self.process_messages()
+            time.sleep(1)  # Adjust tick rate as needed
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    print("Starting SimCore...")
+    sim_core = SimCore()
+    try:
+        sim_core.run()
+    except KeyboardInterrupt:
+        print("Simulation stopped by user.")
+    except Exception as e:
+        print(f"Error in SimCore: {e}")
+    finally:
+        print("SimCore shutting down.")
