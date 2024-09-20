@@ -1,17 +1,38 @@
 #!/bin/bash
 
-# Exit immediately if a command exits with a non-zero status
-set -e
+# Function to handle Ctrl+C
+function shutdown {
+    echo ""
+    echo "Shutting down simulation..."
+    # Kill the background processes
+    kill $SIMCORE_PID $AGENT_PID $TRAFFIC_PID
+    wait $SIMCORE_PID $AGENT_PID $TRAFFIC_PID 2>/dev/null
+    echo "All processes have been terminated."
+    exit
+}
 
-echo "Starting Traffic Simulation modules..."
+# Trap Ctrl+C (SIGINT) and call the shutdown function
+trap shutdown SIGINT
 
-# Start each module in the background
-python3 simCore.py &
-python3 agentModule.py &
-python3 trafficModule.py &
-python3 visualizationModule.py &
+# Start SimCore
+echo "Starting SimCore..."
+python SimCore.py &
+SIMCORE_PID=$!
+
+# Give SimCore a moment to initialize and send the Initialize message
+sleep 2
+
+# Start AgentModule
+echo "Starting AgentModule..."
+python AgentModule.py &
+AGENT_PID=$!
+
+# Start TrafficModule
+echo "Starting TrafficModule..."
+python TrafficModule.py &
+TRAFFIC_PID=$!
 
 # Wait for all background processes to finish
-wait
+wait $SIMCORE_PID $AGENT_PID $TRAFFIC_PID
 
-echo "All modules have been started. Press Ctrl+C to stop the simulation (also kills the viz)."
+echo "Simulation completed."

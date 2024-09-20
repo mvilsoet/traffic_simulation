@@ -1,3 +1,3 @@
-boto3
-dash
-plotly
+boto3 
+pandas
+pyarrow
