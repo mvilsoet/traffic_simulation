@@ -1,38 +1,36 @@
 #!/bin/bash
 
-# Function to handle Ctrl+C
-function shutdown {
-    echo ""
-    echo "Shutting down simulation..."
-    # Kill the background processes
-    kill $SIMCORE_PID $AGENT_PID $TRAFFIC_PID
-    wait $SIMCORE_PID $AGENT_PID $TRAFFIC_PID 2>/dev/null
-    echo "All processes have been terminated."
-    exit
+# Activate virtual environment if using one (uncomment and adjust if needed)
+# source venv/bin/activate
+
+# Navigate to the root directory of the project
+cd "$(dirname "$0")/.."
+
+# Function to kill background processes on exit
+cleanup() {
+    echo "Stopping background processes..."
+    # Send SIGTERM to all child processes
+    pkill -P $$
 }
 
-# Trap Ctrl+C (SIGINT) and call the shutdown function
-trap shutdown SIGINT
+# Trap SIGINT (Ctrl+C) and SIGTERM signals and call cleanup
+trap cleanup SIGINT SIGTERM
 
-# Start SimCore
-echo "Starting SimCore..."
-python3 simCore.py &
+# Run the modules in the background and store their PIDs
+python3 -m traffic_simulation.core.simCore &
 SIMCORE_PID=$!
 
-# Give SimCore a moment to initialize and send the Initialize message
-sleep 2
-
-# Start AgentModule
-echo "Starting AgentModule..."
-python3 agentModule.py &
+python3 -m traffic_simulation.core.agentModule &
 AGENT_PID=$!
 
-# Start TrafficModule
-echo "Starting TrafficModule..."
-python3 trafficModule.py &
+python3 -m traffic_simulation.core.trafficModule &
 TRAFFIC_PID=$!
+
+# Uncomment if you have the visualization module
+# python -m traffic_simulation.core.visualizationModule &
+# VISUALIZATION_PID=$!
 
 # Wait for all background processes to finish
 wait $SIMCORE_PID $AGENT_PID $TRAFFIC_PID
-
-echo "Simulation completed."
+# If visualization module is used, include its PID:
+# wait $SIMCORE_PID $AGENT_PID $TRAFFIC_PID $VISUALIZATION_PID
