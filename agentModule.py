@@ -51,8 +51,8 @@ class AgentModule:
         for vehicle_id, vehicle in self.vehicles.items():
             # Simple movement logic (replace with more complex behavior as needed)
             new_position = (
-                vehicle['position'][0] + random.uniform(-0.1, 0.1),
-                vehicle['position'][1] + random.uniform(-0.1, 0.1)
+                vehicle['position'][0] + random.uniform(-3, 3),
+                vehicle['position'][1] + random.uniform(-3, 3)
             )
             self.vehicles[vehicle_id]['position'] = new_position
             
