@@ -7,6 +7,7 @@ from dash import html, dcc
 from dash.dependencies import Input, Output
 import plotly.graph_objs as go
 from collections import deque
+import threading
 
 class VisualizationModule:
     def __init__(self):
@@ -18,8 +19,9 @@ class VisualizationModule:
         self.sqs = boto3.client('sqs')
         self.queue_urls = {}
         self.update_queue = deque(maxlen=100)  # Store up to 100 updates
+        self.running = True
 
-    async def initialize(self):
+    def initialize(self):
         # Get queue URLs
         queues = ['SimulationEvents', 'VehicleEvents.fifo', 'TrafficControlEvents.fifo']
         for queue in queues:
@@ -29,8 +31,8 @@ class VisualizationModule:
             except ClientError as e:
                 print(f"Error getting queue URL for {queue}: {e}")
 
-    async def process_messages(self):
-        while True:
+    def process_messages(self):
+        while self.running:
             for queue_name, queue_url in self.queue_urls.items():
                 try:
                     response = self.sqs.receive_message(
@@ -51,8 +53,6 @@ class VisualizationModule:
                         )
                 except Exception as e:
                     print(f"Error processing messages from {queue_name}: {e}")
-
-            await asyncio.sleep(0.1)  # Short sleep to prevent tight looping
 
     def create_dash_app(self):
         app = dash.Dash(__name__)
@@ -132,28 +132,27 @@ class VisualizationModule:
         elif event_type == 'RoadBlockageRemoved':
             self.state['road_blockages'].pop(data['blockage_id'], None)
 
-async def run_async_tasks(viz_module):
-    await viz_module.initialize()
-    await viz_module.process_messages()
+    def run(self):
+        self.initialize()
+        
+        # Start message processing in a separate thread
+        message_thread = threading.Thread(target=self.process_messages)
+        message_thread.start()
 
-def run_dash_app(viz_module):
-    app = viz_module.create_dash_app()
-    app.run_server(debug=True, use_reloader=False)
+        # Create and run the Dash app in the main thread
+        app = self.create_dash_app()
+        app.run_server(debug=False, host='0.0.0.0', port=8050)
+
+        # When the Dash app stops, stop the message processing
+        self.running = False
+        message_thread.join()
 
 if __name__ == "__main__":
     print("Starting VisualizationModule...")
     viz_module = VisualizationModule()
     
-    # Run the async task in a separate thread
-    import threading
-    thread = threading.Thread(target=lambda: asyncio.run(run_async_tasks(viz_module)))
-    thread.start()
-    print("Async tasks started in separate thread.")
-
-    print("Starting Dash application...")
     try:
-        # Run the Dash app in the main thread
-        run_dash_app(viz_module)
+        viz_module.run()
     except KeyboardInterrupt:
         print("VisualizationModule stopped by user.")
     except Exception as e:
