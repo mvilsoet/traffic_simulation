@@ -1,5 +1,3 @@
-# visualization.py
-
 import json
 import time
 import dash
@@ -15,7 +13,6 @@ app.title = 'Traffic Simulation Visualization'
 
 # Define the layout
 app.layout = html.Div(children=[
-    html.H1(children='Traffic Simulation Visualization'),
     dcc.Graph(id='simulation-graph'),
     dcc.Interval(
         id='interval-component',
