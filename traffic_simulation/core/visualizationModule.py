@@ -2,38 +2,12 @@
 
 import json
 import time
-import threading
 import dash
 from dash import dcc, html
 from dash.dependencies import Input, Output
 import plotly.express as px
 import pandas as pd
-
-# Global variable to store simulation state
-simulation_state = {
-    'vehicles': {},
-    'traffic_lights': {},
-    'road_blockages': {},
-    'intersections': {},
-    'roads': {}
-}
-
-# Function to continuously read the simulation state file
-def update_simulation_state():
-    while True:
-        try:
-            with open('sim_state.json', 'r') as f:
-                state = json.load(f)
-                simulation_state.update(state)
-        except FileNotFoundError:
-            pass  # The file might not exist yet
-        except json.JSONDecodeError:
-            pass  # The file might be incomplete
-        time.sleep(1)  # Adjust the frequency as needed
-
-# Start the state updater in a separate thread
-state_updater_thread = threading.Thread(target=update_simulation_state, daemon=True)
-state_updater_thread.start()
+import os
 
 # Initialize the Dash app
 app = dash.Dash(__name__)
@@ -56,12 +30,30 @@ app.layout = html.Div(children=[
     Input('interval-component', 'n_intervals')
 )
 def update_graph(n):
-    # Create data frames from the simulation state
-    vehicles = simulation_state['vehicles']
-    traffic_lights = simulation_state['traffic_lights']
-    road_blockages = simulation_state['road_blockages']
-    intersections = simulation_state['intersections']
-    roads = simulation_state['roads']
+    # Path to the simulation state file
+    state_file = 'sim_state.json'
+
+    # Check if the state file exists
+    if not os.path.exists(state_file):
+        # If the file doesn't exist yet, return an empty figure
+        fig = px.scatter(title='Waiting for simulation data...')
+        return fig
+
+    try:
+        # Read the simulation state from the JSON file
+        with open(state_file, 'r') as f:
+            state = json.load(f)
+    except json.JSONDecodeError:
+        # If the file is being written to and is incomplete, skip this update
+        fig = px.scatter(title='Loading simulation data...')
+        return fig
+
+    # Extract data from the state
+    vehicles = state.get('vehicles', {})
+    traffic_lights = state.get('traffic_lights', {})
+    road_blockages = state.get('road_blockages', {})
+    intersections = state.get('intersections', {})
+    roads = state.get('roads', {})
 
     # Prepare data for plotting
     vehicle_df = pd.DataFrame.from_dict(vehicles, orient='index').reset_index()
@@ -70,8 +62,19 @@ def update_graph(n):
     # For simplicity, we'll plot vehicles on a scatter plot
     # Assume positions are along the x-axis for demonstration purposes
     if not vehicle_df.empty:
-        fig = px.scatter(vehicle_df, x='position', y=[0]*len(vehicle_df), color='road',
-                         hover_name='vehicle_id', title='Vehicle Positions')
+        # For demonstration, assign y=0 to all vehicles
+        vehicle_df['y'] = 0
+
+        fig = px.scatter(
+            vehicle_df,
+            x='position',
+            y='y',
+            color='road',
+            hover_name='vehicle_id',
+            title='Vehicle Positions',
+            labels={'position': 'Position on Road', 'y': ''}
+        )
+        fig.update_yaxes(visible=False)
     else:
         fig = px.scatter(title='No Vehicle Data Available')
 
