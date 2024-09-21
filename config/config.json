@@ -14,6 +14,7 @@
       "vehicles": "s3://trafficsimulation/vehicles.parquet",
       "traffic_lights": "s3://trafficsimulation/traffic_lights.parquet",
       "roads": "s3://trafficsimulation/roads.parquet",
+      "intersections": "s3://trafficsimulation/intersections.parquet",
       "road_blockages": "s3://trafficsimulation/road_blockages.parquet"
   }
 }
