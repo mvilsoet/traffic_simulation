@@ -37,7 +37,8 @@ def create_road_lines(roads_df):
             'line': {
                 'width': 4,
                 'color': 'gray'
-            }
+            },
+            'layer': 'below'  # Ensure roads are drawn below data traces
         }
         road_shapes.append(road_shape)
     return road_shapes
@@ -59,7 +60,8 @@ def create_road_blockages(roads_df, road_blockages):
                     'line': {
                         'width': 6,
                         'color': 'red'
-                    }
+                    },
+                    'layer': 'below'  # Ensure blockages are drawn below data traces
                 }
                 blockage_shapes.append(blockage_shape)
     return blockage_shapes
@@ -174,7 +176,6 @@ def update_graph(n):
             name='Vehicles',
             hovertext=vehicle_positions_df['vehicle_id']
         ))
-
 
     fig.update_layout(
         title='Traffic Simulation Visualization',
