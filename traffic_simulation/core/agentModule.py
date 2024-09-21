@@ -1,6 +1,7 @@
 # AgentModule.py
 
 import json
+import os
 import time
 import pandas as pd
 import boto3
@@ -12,7 +13,8 @@ class AgentModule:
         self.initialized = False
 
         # Load configuration
-        config_path = os.path.join(os.path.dirname(__file__), '../../config/config.json')
+        config_file = os.path.join(os.path.dirname(__file__), '../../config/config.json')
+        with open(config_file, 'r') as config_file:
             CONFIG = json.load(config_file)
             QUEUES = CONFIG.get('AGENT_MOD_QUEUES', ['SimulationEvents', 'SimCoreUpdates'])
             self.MAX_NUMBER_OF_MESSAGES = CONFIG.get('MAX_NUMBER_OF_MESSAGES', 10)
