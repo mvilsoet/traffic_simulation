@@ -1,22 +1,12 @@
-# traffic_simulation/core/trafficModule.py
+# TrafficControlModule.py
 
 import json
+import os
 import time
 import pandas as pd
 import boto3
 from traffic_simulation.utils import sqsUtility
 import random
-import logging
-import os
-
-# Set up logging
-logging.basicConfig(
-    level=logging.INFO,  # Change to DEBUG for more detailed logs
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler()
-    ]
-)
 
 class TrafficControlModule:
     def __init__(self):
@@ -36,106 +26,67 @@ class TrafficControlModule:
             self.WAIT_TIME_SECONDS = CONFIG.get('WAIT_TIME_SECONDS', 1)
 
         self.queue_urls = sqsUtility.get_queue_urls(QUEUES)
-        logging.info(f"Queue URLs: {self.queue_urls}")
-
         # AWS S3 client
         self.s3_client = boto3.client('s3')
 
     def poll_messages(self):
-        messages = sqsUtility.receive_messages(
-            self.queue_urls['SimulationEvents'],
-            self.MAX_NUMBER_OF_MESSAGES,
-            self.WAIT_TIME_SECONDS
-        )
+        messages = sqsUtility.receive_messages(self.queue_urls['SimulationEvents'], self.MAX_NUMBER_OF_MESSAGES)
         for message in messages:
             body = json.loads(message['Body'])
             message_type = body.get('type')
-            logging.info(f"Received message of type: {message_type}")
             if message_type == 'Initialize':
                 self.handle_initialize(body['data'])
-            elif message_type == 'SimulationTick':
-                if self.initialized:
-                    self.process_tick(body['data'])
-                else:
-                    logging.warning("Received SimulationTick but module is not initialized.")
+            elif message_type == 'SimulationTick' and self.initialized:
+                self.process_tick(body['data'])
             else:
-                logging.warning(f"Unhandled message type: {message_type}")
+                print(f"(trafficModule) Unhandled message type: {message_type}", message)
+                print(message)
 
             # Delete the message after processing
             sqsUtility.delete_message(self.queue_urls['SimulationEvents'], message['ReceiptHandle'])
 
     def handle_initialize(self, data):
         """Initialize the module's state based on the data from SimCore."""
-        logging.info("TrafficControlModule received Initialize message.")
+        print("TrafficControlModule received Initialize message.")
         s3_links = data.get('s3_links')
         if s3_links:
-            try:
-                self.load_initial_state(s3_links)
-                self.initialized = True
-                logging.info("Initialized TrafficControlModule with initial state.")
-            except Exception as e:
-                logging.error(f"Error during initialization: {e}")
-                self.initialized = False
+            self.load_initial_state(s3_links)
+            self.initialized = True
+            print("Initialized TrafficControlModule with initial state.")
         else:
-            logging.error("No S3 links provided in Initialize message.")
+            print("No S3 links provided in Initialize message.")
 
     def load_initial_state(self, s3_links):
         """Download Parquet files from S3 and initialize the state."""
         # Parse and download traffic lights
         traffic_lights_s3_url = s3_links.get('traffic_lights')
         if traffic_lights_s3_url:
-            self.download_and_load_parquet(
-                s3_url=traffic_lights_s3_url,
-                local_filename='traffic_lights.parquet',
-                state_key='traffic_lights',
-                index_column='intersection_id',
-                value_column='state'
-            )
+            bucket_name, key = self.parse_s3_url(traffic_lights_s3_url)
+            self.s3_client.download_file(bucket_name, key, 'traffic_lights.parquet')
+            traffic_lights_df = pd.read_parquet('traffic_lights.parquet')
+            self.state['traffic_lights'] = traffic_lights_df.set_index('intersection_id')['state'].to_dict()
         else:
-            logging.error("No traffic lights S3 link provided.")
+            print("No traffic lights S3 link provided.")
 
         # Parse and download roads
         roads_s3_url = s3_links.get('roads')
         if roads_s3_url:
-            self.download_and_load_parquet(
-                s3_url=roads_s3_url,
-                local_filename='roads.parquet',
-                state_key='roads',
-                orient='index'
-            )
+            bucket_name, key = self.parse_s3_url(roads_s3_url)
+            self.s3_client.download_file(bucket_name, key, 'roads.parquet')
+            roads_df = pd.read_parquet('roads.parquet')
+            self.state['roads'] = roads_df.set_index('road_id').to_dict(orient='index')
         else:
-            logging.error("No roads S3 link provided.")
+            print("No roads S3 link provided.")
 
         # Parse and download road blockages
         road_blockages_s3_url = s3_links.get('road_blockages')
         if road_blockages_s3_url:
-            self.download_and_load_parquet(
-                s3_url=road_blockages_s3_url,
-                local_filename='road_blockages.parquet',
-                state_key='road_blockages',
-                index_column='road_id',
-                value_column='blocked'
-            )
+            bucket_name, key = self.parse_s3_url(road_blockages_s3_url)
+            self.s3_client.download_file(bucket_name, key, 'road_blockages.parquet')
+            road_blockages_df = pd.read_parquet('road_blockages.parquet')
+            self.state['road_blockages'] = road_blockages_df.set_index('road_id')['blocked'].to_dict()
         else:
-            logging.error("No road blockages S3 link provided.")
-
-    def download_and_load_parquet(self, s3_url, local_filename, state_key, index_column=None, value_column=None, orient=None):
-        """Helper function to download and load Parquet files."""
-        try:
-            bucket_name, key = self.parse_s3_url(s3_url)
-            logging.info(f"Downloading {s3_url} to {local_filename}")
-            self.s3_client.download_file(bucket_name, key, local_filename)
-            df = pd.read_parquet(local_filename)
-            if index_column and value_column:
-                self.state[state_key] = df.set_index(index_column)[value_column].to_dict()
-            elif orient:
-                self.state[state_key] = df.set_index(df.columns[0]).to_dict(orient=orient)
-            else:
-                self.state[state_key] = df.to_dict()
-            logging.info(f"Loaded {state_key} from {local_filename}")
-        except Exception as e:
-            logging.error(f"Error loading {s3_url}: {e}")
-            raise
+            print("No road blockages S3 link provided.")
 
     def parse_s3_url(self, s3_url):
         """Parse S3 URL to extract bucket name and key."""
@@ -172,11 +123,8 @@ class TrafficControlModule:
             })
 
         # Send batch updates to SimCoreUpdates queue
-        try:
-            sqsUtility.send_batch_messages(self.queue_urls['SimCoreUpdates'], batch_updates)
-            logging.info(f"Sent updates to SimCore for tick {tick_data['tick_number']}")
-        except Exception as e:
-            logging.error(f"Error sending updates to SimCore: {e}")
+        sqsUtility.send_batch_messages(self.queue_urls['SimCoreUpdates'], batch_updates)
+        print(f"TrafficControlModule sent updates to SimCore for tick {tick_data['tick_number']}")
 
     def change_traffic_light(self, intersection, current_state):
         # Simple traffic light state change logic
@@ -194,7 +142,7 @@ class TrafficControlModule:
         return 'blocked' if random.random() < 0.1 else 'unblocked'
 
 if __name__ == "__main__":
-    logging.info("Starting TrafficControlModule...")
+    print("Starting TrafficControlModule...")
 
     traffic_control = TrafficControlModule()
 
@@ -205,8 +153,8 @@ if __name__ == "__main__":
             time.sleep(0.1)  # Small delay to prevent tight loop
 
     except KeyboardInterrupt:
-        logging.info("TrafficControlModule stopped by user.")
+        print("TrafficControlModule stopped by user.")
     except Exception as e:
-        logging.error(f"Error in TrafficControlModule: {e}")
+        print(f"Error in TrafficControlModule: {e}")
     finally:
-        logging.info("TrafficControlModule shutting down.")
+        print("TrafficControlModule shutting down.")
