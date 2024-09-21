@@ -57,35 +57,45 @@ class TrafficControlModule:
 
     def load_initial_state(self, s3_links):
         """Download Parquet files from S3 and initialize the state."""
-        # Parse and download traffic lights
-        traffic_lights_s3_url = s3_links.get('traffic_lights')
-        if traffic_lights_s3_url:
-            bucket_name, key = self.parse_s3_url(traffic_lights_s3_url)
-            self.s3_client.download_file(bucket_name, key, 'traffic_lights.parquet')
-            traffic_lights_df = pd.read_parquet('traffic_lights.parquet')
-            self.state['traffic_lights'] = traffic_lights_df.set_index('intersection_id')['state'].to_dict()
-        else:
-            print("No traffic lights S3 link provided.")
+        try:
+            # Parse and download traffic lights
+            traffic_lights_s3_url = s3_links.get('traffic_lights')
+            if traffic_lights_s3_url:
+                print(f"Downloading traffic lights from {traffic_lights_s3_url}")
+                bucket_name, key = self.parse_s3_url(traffic_lights_s3_url)
+                self.s3_client.download_file(bucket_name, key, 'traffic_lights.parquet')
+                traffic_lights_df = pd.read_parquet('traffic_lights.parquet')
+                self.state['traffic_lights'] = traffic_lights_df.set_index('intersection_id')['state'].to_dict()
+                print(f"Loaded {len(self.state['traffic_lights'])} traffic lights.")
+            else:
+                print("No traffic lights S3 link provided.")
 
-        # Parse and download roads
-        roads_s3_url = s3_links.get('roads')
-        if roads_s3_url:
-            bucket_name, key = self.parse_s3_url(roads_s3_url)
-            self.s3_client.download_file(bucket_name, key, 'roads.parquet')
-            roads_df = pd.read_parquet('roads.parquet')
-            self.state['roads'] = roads_df.set_index('road_id').to_dict(orient='index')
-        else:
-            print("No roads S3 link provided.")
+            # Parse and download roads
+            roads_s3_url = s3_links.get('roads')
+            if roads_s3_url:
+                print(f"Downloading roads from {roads_s3_url}")
+                bucket_name, key = self.parse_s3_url(roads_s3_url)
+                self.s3_client.download_file(bucket_name, key, 'roads.parquet')
+                roads_df = pd.read_parquet('roads.parquet')
+                self.state['roads'] = roads_df.set_index('road_id').to_dict(orient='index')
+                print(f"Loaded {len(self.state['roads'])} roads.")
+            else:
+                print("No roads S3 link provided.")
 
-        # Parse and download road blockages
-        road_blockages_s3_url = s3_links.get('road_blockages')
-        if road_blockages_s3_url:
-            bucket_name, key = self.parse_s3_url(road_blockages_s3_url)
-            self.s3_client.download_file(bucket_name, key, 'road_blockages.parquet')
-            road_blockages_df = pd.read_parquet('road_blockages.parquet')
-            self.state['road_blockages'] = road_blockages_df.set_index('road_id')['blocked'].to_dict()
-        else:
-            print("No road blockages S3 link provided.")
+            # Parse and download road blockages
+            road_blockages_s3_url = s3_links.get('road_blockages')
+            if road_blockages_s3_url:
+                print(f"Downloading road blockages from {road_blockages_s3_url}")
+                bucket_name, key = self.parse_s3_url(road_blockages_s3_url)
+                self.s3_client.download_file(bucket_name, key, 'road_blockages.parquet')
+                road_blockages_df = pd.read_parquet('road_blockages.parquet')
+                self.state['road_blockages'] = road_blockages_df.set_index('road_id')['blocked'].to_dict()
+                print(f"Loaded {len(self.state['road_blockages'])} road blockages.")
+            else:
+                print("No road blockages S3 link provided.")
+        except Exception as e:
+            print(f"Error loading initial state: {e}")
+            self.initialized = False  # Ensure initialized remains False on error
 
     def parse_s3_url(self, s3_url):
         """Parse S3 URL to extract bucket name and key."""
