@@ -80,6 +80,9 @@ class SimCore:
             # Process updates and update internal state
             self.run_simulation_step()
 
+            # Serialize the state to a JSON file for visualization
+            self.export_state()
+
             # Increment tick number
             self.tick_number += 1
 
@@ -133,6 +136,12 @@ class SimCore:
     def run_simulation_step(self):
         # Internal updates (if needed)
         pass
+
+    def export_state(self):
+        """Serialize the simulation state to a JSON file."""
+        with open('sim_state.json', 'w') as f:
+            json.dump(self.state, f)
+        print("Exported simulation state to sim_state.json")
 
 if __name__ == "__main__":
     print("Starting SimCore...")
