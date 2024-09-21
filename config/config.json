@@ -2,16 +2,18 @@
   "aws": {
       "region": "us-east-1"
   },
-  "QUEUES": ["SimulationEvents", "VehicleEvents.fifo", "TrafficUpdates", "SimCoreUpdates"],
-  "TRAFFIC_MOD_QUEUES": ["SimulationEvents", "SimCoreUpdates"],
+  "QUEUES": ["SimulationEvents", "SimCoreUpdates"],
   "AGENT_MOD_QUEUES": ["SimulationEvents", "SimCoreUpdates"],
+  "TRAFFIC_MOD_QUEUES": ["SimulationEvents", "SimCoreUpdates"],
   "SIMCORE_QUEUE": "SimulationEvents",
   "SIMCORE_UPDATES_QUEUE": "SimCoreUpdates",
   "MAX_NUMBER_OF_MESSAGES": 10,
   "WAIT_TIME_SECONDS": 0,
   "TICK_INTERVAL": 1,
-  "sqs": {
-      "max_number_of_messages": 10,
-      "wait_time_seconds": 0
+  "S3_LINKS": {
+      "vehicles": "s3://trafficsimulation/vehicles.parquet",
+      "traffic_lights": "s3://trafficsimulation/traffic_lights.parquet",
+      "roads": "s3://trafficsimulation/roads.parquet",
+      "road_blockages": "s3://trafficsimulation/road_blockages.parquet"
   }
 }
