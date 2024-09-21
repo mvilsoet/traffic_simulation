@@ -1,5 +1,3 @@
-# SimCore.py
-
 import os
 import time
 import json
