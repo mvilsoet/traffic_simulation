@@ -24,6 +24,7 @@ class TrafficControlModule:
             QUEUES = CONFIG.get('TRAFFIC_MOD_QUEUES', ['SimulationEvents', 'SimCoreUpdates'])
             self.MAX_NUMBER_OF_MESSAGES = CONFIG.get('MAX_NUMBER_OF_MESSAGES', 10)
             self.WAIT_TIME_SECONDS = CONFIG.get('WAIT_TIME_SECONDS', 1)
+            self.S3_LINKS = CONFIG.get('S3_LINKS', {})
 
         self.queue_urls = sqsUtility.get_queue_urls(QUEUES)
         # AWS S3 client
@@ -34,32 +35,19 @@ class TrafficControlModule:
         for message in messages:
             body = json.loads(message['Body'])
             message_type = body.get('type')
-            if message_type == 'Initialize':
-                self.handle_initialize(body['data'])
-            elif message_type == 'SimulationTick' and self.initialized:
+            if message_type == 'SimulationTick' and self.initialized:
                 self.process_tick(body['data'])
             else:
-                print(f"(trafficModule) Unhandled message type: {message_type}", message)
+                print(f"(TrafficControlModule) Unhandled message type: {message_type}", message)
 
             # Delete the message after processing
             sqsUtility.delete_message(self.queue_urls['SimulationEvents'], message['ReceiptHandle'])
 
-    def handle_initialize(self, data):
-        """Initialize the module's state based on the data from SimCore."""
-        print("TrafficControlModule received Initialize message.")
-        s3_links = data.get('s3_links')
-        if s3_links:
-            self.load_initial_state(s3_links)
-            self.initialized = True
-            print("Initialized TrafficControlModule with initial state.")
-        else:
-            print("No S3 links provided in Initialize message.")
-
-    def load_initial_state(self, s3_links):
+    def load_initial_state(self):
         """Download Parquet files from S3 and initialize the state."""
         try:
             # Parse and download traffic lights
-            traffic_lights_s3_url = s3_links.get('traffic_lights')
+            traffic_lights_s3_url = self.S3_LINKS.get('traffic_lights')
             if traffic_lights_s3_url:
                 print(f"Downloading traffic lights from {traffic_lights_s3_url}")
                 bucket_name, key = self.parse_s3_url(traffic_lights_s3_url)
@@ -71,7 +59,7 @@ class TrafficControlModule:
                 print("No traffic lights S3 link provided.")
 
             # Parse and download roads
-            roads_s3_url = s3_links.get('roads')
+            roads_s3_url = self.S3_LINKS.get('roads')
             if roads_s3_url:
                 print(f"Downloading roads from {roads_s3_url}")
                 bucket_name, key = self.parse_s3_url(roads_s3_url)
@@ -83,7 +71,7 @@ class TrafficControlModule:
                 print("No roads S3 link provided.")
 
             # Parse and download road blockages
-            road_blockages_s3_url = s3_links.get('road_blockages')
+            road_blockages_s3_url = self.S3_LINKS.get('road_blockages')
             if road_blockages_s3_url:
                 print(f"Downloading road blockages from {road_blockages_s3_url}")
                 bucket_name, key = self.parse_s3_url(road_blockages_s3_url)
@@ -93,6 +81,8 @@ class TrafficControlModule:
                 print(f"Loaded {len(self.state['road_blockages'])} road blockages.")
             else:
                 print("No road blockages S3 link provided.")
+
+            self.initialized = True
         except Exception as e:
             print(f"Error loading initial state: {e}")
             self.initialized = False  # Ensure initialized remains False on error
@@ -155,15 +145,21 @@ if __name__ == "__main__":
 
     traffic_control = TrafficControlModule()
 
-    try:
-        # Start polling messages
-        while True:
-            traffic_control.poll_messages()
-            time.sleep(0.1)  # Small delay to prevent tight loop
+    # Load initial state
+    traffic_control.load_initial_state()
 
-    except KeyboardInterrupt:
-        print("TrafficControlModule stopped by user.")
-    except Exception as e:
-        print(f"Error in TrafficControlModule: {e}")
-    finally:
-        print("TrafficControlModule shutting down.")
+    if traffic_control.initialized:
+        try:
+            # Start polling messages
+            while True:
+                traffic_control.poll_messages()
+                time.sleep(0.1)  # Small delay to prevent tight loop
+
+        except KeyboardInterrupt:
+            print("TrafficControlModule stopped by user.")
+        except Exception as e:
+            print(f"Error in TrafficControlModule: {e}")
+        finally:
+            print("TrafficControlModule shutting down.")
+    else:
+        print("Failed to initialize TrafficControlModule. Exiting.")

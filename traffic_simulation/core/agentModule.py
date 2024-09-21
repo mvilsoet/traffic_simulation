@@ -19,6 +19,7 @@ class AgentModule:
             QUEUES = CONFIG.get('AGENT_MOD_QUEUES', ['SimulationEvents', 'SimCoreUpdates'])
             self.MAX_NUMBER_OF_MESSAGES = CONFIG.get('MAX_NUMBER_OF_MESSAGES', 10)
             self.WAIT_TIME_SECONDS = CONFIG.get('WAIT_TIME_SECONDS', 1)
+            self.S3_LINKS = CONFIG.get('S3_LINKS', {})
 
         self.queue_urls = sqsUtility.get_queue_urls(QUEUES)
         # AWS S3 client
@@ -30,9 +31,7 @@ class AgentModule:
             for message in messages:
                 event = json.loads(message['Body'])
                 event_type = event.get('type')
-                if event_type == 'Initialize':
-                    self.handle_initialize(event['data'])
-                elif event_type == 'SimulationTick' and self.initialized:
+                if event_type == 'SimulationTick' and self.initialized:
                     self.process_tick(event['data'])
                 else:
                     print(f"(AgentModule) Unhandled event type: {event_type}")
@@ -42,24 +41,10 @@ class AgentModule:
         except Exception as e:
             print(f"(AgentModule) Error processing messages: {e}")
 
-    def handle_initialize(self, data):
-        """Initialize the module's state based on the data from SimCore."""
-        print("AgentModule received Initialize message.")
-        s3_links = data.get('s3_links')
-        if s3_links:
-            self.load_initial_state(s3_links)
-            if self.vehicles:
-                self.initialized = True
-                print(f"Initialized AgentModule with {len(self.vehicles)} vehicles.")
-            else:
-                print("Failed to initialize AgentModule due to missing vehicle data.")
-        else:
-            print("No S3 links provided in Initialize message.")
-
-    def load_initial_state(self, s3_links):
+    def load_initial_state(self):
         """Download Parquet files from S3 and initialize vehicles."""
         try:
-            vehicles_s3_url = s3_links.get('vehicles')
+            vehicles_s3_url = self.S3_LINKS.get('vehicles')
             if vehicles_s3_url:
                 print(f"Downloading vehicles data from {vehicles_s3_url}")
                 # Parse the S3 URL
@@ -71,8 +56,10 @@ class AgentModule:
                 # Convert DataFrame to dictionary
                 self.vehicles = vehicles_df.set_index('vehicle_id').to_dict(orient='index')
                 print(f"Loaded {len(self.vehicles)} vehicles.")
+                self.initialized = True
             else:
                 print("No vehicles S3 link provided.")
+                self.initialized = False
         except Exception as e:
             print(f"(AgentModule) Error loading initial state: {e}")
             self.initialized = False  # Ensure initialized remains False on error
@@ -115,15 +102,21 @@ if __name__ == "__main__":
 
     agent_module = AgentModule()
 
-    try:
-        # Start processing messages
-        while True:
-            agent_module.process_messages()
-            time.sleep(0.1)  # Small delay to prevent tight loop
+    # Load initial state
+    agent_module.load_initial_state()
 
-    except KeyboardInterrupt:
-        print("AgentModule stopped by user.")
-    except Exception as e:
-        print(f"Error in AgentModule: {e}")
-    finally:
-        print("AgentModule shutting down.")
+    if agent_module.initialized:
+        try:
+            # Start processing messages
+            while True:
+                agent_module.process_messages()
+                time.sleep(0.1)  # Small delay to prevent tight loop
+
+        except KeyboardInterrupt:
+            print("AgentModule stopped by user.")
+        except Exception as e:
+            print(f"Error in AgentModule: {e}")
+        finally:
+            print("AgentModule shutting down.")
+    else:
+        print("Failed to initialize AgentModule. Exiting.")

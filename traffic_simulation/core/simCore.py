@@ -25,14 +25,12 @@ class SimCore:
         # Initialize the simulation state
         self.state = self.load_initial_state()
 
-        # Send the Initialize message
-        self.send_initialize_message()
-
         # Initialize tick counter
         self.tick_number = 0
 
     def load_initial_state(self):
-        # Since the initial state is provided via S3 links, we assume the data is already available
+        # Since the initial state is provided via S3 links and loaded by the modules themselves,
+        # we can initialize our state here as needed.
         state = {
             'intersections': {},
             'roads': {},
@@ -41,26 +39,6 @@ class SimCore:
             'road_blockages': {}
         }
         return state
-
-    def send_initialize_message(self):
-        # S3 links to the Parquet files (you will provide these links)
-        s3_links = {
-            'intersections': 's3://trafficsimulation/intersections.parquet',
-            'roads': 's3://trafficsimulation/roads.parquet',
-            'traffic_lights': 's3://trafficsimulation/traffic_lights.parquet',
-            'vehicles': 's3://trafficsimulation/vehicles.parquet',
-            'road_blockages': 's3://trafficsimulation/road_blockages.parquet'
-        }
-
-        # Send an Initialize message containing the S3 links
-        initialize_message = {
-            'type': 'Initialize',
-            'data': {
-                's3_links': s3_links
-            }
-        }
-        sqsUtility.send_message(self.queue_urls[self.SIMCORE_QUEUE], initialize_message)
-        print("Sent Initialize message with S3 links to initial state.")
 
     def run_simulation_loop(self):
         while True:
@@ -109,7 +87,7 @@ class SimCore:
         elif message_type == 'ROAD_BLOCKAGE':
             self.update_road_blockage_state(data)
         else:
-            print(f"(simCore) Unhandled message type: {message_type}")
+            print(f"(SimCore) Unhandled message type: {message_type}")
 
     def update_vehicle_state(self, data):
         vehicle_id = data['vehicle_id']
