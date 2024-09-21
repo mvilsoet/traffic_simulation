@@ -1,5 +1,3 @@
-# sqsUtility.py
-
 import os
 import boto3
 import json
