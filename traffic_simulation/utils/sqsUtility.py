@@ -7,7 +7,7 @@ import logging
 import uuid
 
 # Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Load configuration from config.json
 config_file = os.path.join(os.path.dirname(__file__), '../../config/config.json')
@@ -101,7 +101,7 @@ def send_batch_messages(queue_url, messages, message_group_id=None):
                 Entries=batch_entries
             )
             responses.append(response)
-            # logging.info(f"Batch messages sent to queue {queue_url}: {len(batch_entries)} messages")
+            logging.info(f"Batch messages sent to queue {queue_url}: {len(batch_entries)} messages")
         except Exception as e:
             logging.error(f"Error sending batch messages to queue {queue_url}: {str(e)}")
             raise
@@ -121,7 +121,7 @@ def receive_messages(queue_url, max_number_of_messages=MAX_NUMBER_OF_MESSAGES, w
             MessageAttributeNames=['All']
         )
         messages = response.get('Messages', [])
-        # logging.info(f"Received {len(messages)} messages from queue: {queue_url}")
+        logging.info(f"Received {len(messages)} messages from queue: {queue_url}")
         return messages
     except Exception as e:
         logging.error(f"Error receiving messages from queue {queue_url}: {str(e)}")
@@ -136,7 +136,7 @@ def delete_message(queue_url, receipt_handle):
             QueueUrl=queue_url,
             ReceiptHandle=receipt_handle
         )
-        # logging.info(f"Message deleted successfully from queue: {queue_url}")
+        logging.info(f"Message deleted successfully from queue: {queue_url}")
     except Exception as e:
         logging.error(f"Error deleting message from queue {queue_url}: {str(e)}")
         raise
