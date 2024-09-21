@@ -1,5 +1,3 @@
-# generate_initial_state.py
-
 import pandas as pd
 import boto3
 import os
