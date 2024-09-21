@@ -139,9 +139,10 @@ class SimCore:
 
     def export_state(self):
         """Serialize the simulation state to a JSON file."""
-        with open('sim_state.json', 'w') as f:
-            json.dump(self.state, f)
-        print("Exported simulation state to sim_state.json")
+        if self.tick_number % 5 == 0:
+            with open('sim_state.json', 'w') as f:
+                json.dump(self.state, f)
+            # print("Exported simulation state to sim_state.json")
 
 if __name__ == "__main__":
     print("Starting SimCore...")
