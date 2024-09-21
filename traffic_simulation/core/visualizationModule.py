@@ -5,7 +5,7 @@ import time
 import dash
 from dash import dcc, html
 from dash.dependencies import Input, Output
-import plotly.express as px
+import plotly.graph_objects as go
 import pandas as pd
 import os
 
@@ -24,6 +24,68 @@ app.layout = html.Div(children=[
     )
 ])
 
+def create_road_lines(roads_df):
+    """Create line shapes for roads."""
+    road_shapes = []
+    for _, road in roads_df.iterrows():
+        road_shape = {
+            'type': 'line',
+            'x0': road['start_x'],
+            'y0': road['start_y'],
+            'x1': road['end_x'],
+            'y1': road['end_y'],
+            'line': {
+                'width': 4,
+                'color': 'gray'
+            }
+        }
+        road_shapes.append(road_shape)
+    return road_shapes
+
+def create_road_blockages(roads_df, road_blockages):
+    """Modify road shapes to indicate blockages."""
+    blockage_shapes = []
+    for road_id, blocked in road_blockages.items():
+        if blocked:
+            road = roads_df.loc[roads_df['road_id'] == road_id]
+            if not road.empty:
+                road = road.iloc[0]
+                blockage_shape = {
+                    'type': 'line',
+                    'x0': road['start_x'],
+                    'y0': road['start_y'],
+                    'x1': road['end_x'],
+                    'y1': road['end_y'],
+                    'line': {
+                        'width': 6,
+                        'color': 'red'
+                    }
+                }
+                blockage_shapes.append(blockage_shape)
+    return blockage_shapes
+
+def create_traffic_light_markers(intersections_df, traffic_lights):
+    """Create markers for traffic lights."""
+    traffic_light_markers = []
+    for intersection_id, state in traffic_lights.items():
+        intersection = intersections_df.loc[intersections_df['intersection_id'] == intersection_id]
+        if not intersection.empty:
+            intersection = intersection.iloc[0]
+            color = {'green': 'green', 'yellow': 'yellow', 'red': 'red'}.get(state, 'gray')
+            marker = go.Scatter(
+                x=[intersection['x']],
+                y=[intersection['y']],
+                mode='markers',
+                marker=dict(
+                    size=20,
+                    color=color,
+                    symbol='circle'
+                ),
+                name=f'Traffic Light {intersection_id}'
+            )
+            traffic_light_markers.append(marker)
+    return traffic_light_markers
+
 # Callback to update the graph
 @app.callback(
     Output('simulation-graph', 'figure'),
@@ -36,7 +98,8 @@ def update_graph(n):
     # Check if the state file exists
     if not os.path.exists(state_file):
         # If the file doesn't exist yet, return an empty figure
-        fig = px.scatter(title='Waiting for simulation data...')
+        fig = go.Figure()
+        fig.update_layout(title='Waiting for simulation data...')
         return fig
 
     try:
@@ -45,7 +108,8 @@ def update_graph(n):
             state = json.load(f)
     except json.JSONDecodeError:
         # If the file is being written to and is incomplete, skip this update
-        fig = px.scatter(title='Loading simulation data...')
+        fig = go.Figure()
+        fig.update_layout(title='Loading simulation data...')
         return fig
 
     # Extract data from the state
@@ -55,28 +119,71 @@ def update_graph(n):
     intersections = state.get('intersections', {})
     roads = state.get('roads', {})
 
-    # Prepare data for plotting
-    vehicle_df = pd.DataFrame.from_dict(vehicles, orient='index').reset_index()
-    vehicle_df.rename(columns={'index': 'vehicle_id'}, inplace=True)
+    # Convert data to DataFrames
+    vehicles_df = pd.DataFrame.from_dict(vehicles, orient='index').reset_index()
+    vehicles_df.rename(columns={'index': 'vehicle_id'}, inplace=True)
 
-    # For simplicity, we'll plot vehicles on a scatter plot
-    # Assume positions are along the x-axis for demonstration purposes
-    if not vehicle_df.empty:
-        # For demonstration, assign y=0 to all vehicles
-        vehicle_df['y'] = 0
+    roads_df = pd.DataFrame.from_dict(roads, orient='index').reset_index()
+    roads_df.rename(columns={'index': 'road_id'}, inplace=True)
 
-        fig = px.scatter(
-            vehicle_df,
-            x='position',
-            y='y',
-            color='road',
-            hover_name='vehicle_id',
-            title='Vehicle Positions',
-            labels={'position': 'Position on Road', 'y': ''}
-        )
-        fig.update_yaxes(visible=False)
-    else:
-        fig = px.scatter(title='No Vehicle Data Available')
+    intersections_df = pd.DataFrame.from_dict(intersections, orient='index').reset_index()
+    intersections_df.rename(columns={'index': 'intersection_id'}, inplace=True)
+
+    # Prepare the figure
+    fig = go.Figure()
+
+    # Add road lines
+    if not roads_df.empty:
+        road_shapes = create_road_lines(roads_df)
+        fig.update_layout(shapes=road_shapes)
+
+    # Add road blockages
+    if road_blockages:
+        blockage_shapes = create_road_blockages(roads_df, road_blockages)
+        # Append blockage shapes to the existing shapes
+        fig.update_layout(shapes=fig.layout.shapes + tuple(blockage_shapes))
+
+    # Add traffic lights
+    if traffic_lights:
+        traffic_light_markers = create_traffic_light_markers(intersections_df, traffic_lights)
+        for marker in traffic_light_markers:
+            fig.add_trace(marker)
+
+    # Add vehicles
+    if not vehicles_df.empty:
+        # Map vehicle positions to x and y coordinates on the roads
+        vehicle_positions = []
+        for _, vehicle in vehicles_df.iterrows():
+            road_id = vehicle['road']
+            road = roads_df.loc[roads_df['road_id'] == road_id]
+            if not road.empty:
+                road = road.iloc[0]
+                # Calculate vehicle position along the road
+                t = vehicle['position'] / road['length']
+                t = max(0, min(t, 1))  # Ensure t is between 0 and 1
+                x = road['start_x'] + t * (road['end_x'] - road['start_x'])
+                y = road['start_y'] + t * (road['end_y'] - road['start_y'])
+                vehicle_positions.append({'vehicle_id': vehicle['vehicle_id'], 'x': x, 'y': y})
+        vehicle_positions_df = pd.DataFrame(vehicle_positions)
+
+        fig.add_trace(go.Scatter(
+            x=vehicle_positions_df['x'],
+            y=vehicle_positions_df['y'],
+            mode='markers',
+            marker=dict(size=10, color='blue', symbol='car'),
+            name='Vehicles',
+            hovertext=vehicle_positions_df['vehicle_id']
+        ))
+
+    fig.update_layout(
+        title='Traffic Simulation Visualization',
+        xaxis_title='X Coordinate',
+        yaxis_title='Y Coordinate',
+        xaxis=dict(scaleanchor='y', scaleratio=1),
+        yaxis=dict(scaleanchor='x', scaleratio=1),
+        showlegend=True,
+        margin=dict(l=40, r=40, t=40, b=40)
+    )
 
     return fig
 
