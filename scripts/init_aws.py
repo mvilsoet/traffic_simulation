@@ -22,6 +22,18 @@ def generate_initial_state():
         'speed_limit': [50, 50, 40]
     })
 
+    # Merge to get start coordinates
+    roads = roads.merge(
+        intersections.rename(columns={'intersection_id': 'start', 'x': 'start_x', 'y': 'start_y'}),
+        on='start', how='left'
+    )
+
+    # Merge to get end coordinates
+    roads = roads.merge(
+        intersections.rename(columns={'intersection_id': 'end', 'x': 'end_x', 'y': 'end_y'}),
+        on='end', how='left'
+    )
+
     # Define traffic lights
     traffic_lights = pd.DataFrame({
         'intersection_id': ['A', 'B', 'C'],
