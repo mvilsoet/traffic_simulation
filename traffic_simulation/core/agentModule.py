@@ -35,12 +35,12 @@ class AgentModule:
                 elif event_type == 'SimulationTick' and self.initialized:
                     self.process_tick(event['data'])
                 else:
-                    print(f"(agentModule) Unhandled event type: {event_type}")
+                    print(f"(AgentModule) Unhandled event type: {event_type}")
 
                 # Delete the message from the queue
                 sqsUtility.delete_message(self.queue_urls['SimulationEvents'], message['ReceiptHandle'])
         except Exception as e:
-            print(f"Error processing messages: {e}")
+            print(f"(AgentModule) Error processing messages: {e}")
 
     def handle_initialize(self, data):
         """Initialize the module's state based on the data from SimCore."""
@@ -48,25 +48,34 @@ class AgentModule:
         s3_links = data.get('s3_links')
         if s3_links:
             self.load_initial_state(s3_links)
-            self.initialized = True
-            print(f"Initialized AgentModule with {len(self.vehicles)} vehicles.")
+            if self.vehicles:
+                self.initialized = True
+                print(f"Initialized AgentModule with {len(self.vehicles)} vehicles.")
+            else:
+                print("Failed to initialize AgentModule due to missing vehicle data.")
         else:
             print("No S3 links provided in Initialize message.")
 
     def load_initial_state(self, s3_links):
         """Download Parquet files from S3 and initialize vehicles."""
-        vehicles_s3_url = s3_links.get('vehicles')
-        if vehicles_s3_url:
-            # Parse the S3 URL
-            bucket_name, key = self.parse_s3_url(vehicles_s3_url)
-            # Download the Parquet file
-            self.s3_client.download_file(bucket_name, key, 'vehicles.parquet')
-            # Load the Parquet file into a DataFrame
-            vehicles_df = pd.read_parquet('vehicles.parquet')
-            # Convert DataFrame to dictionary
-            self.vehicles = vehicles_df.set_index('vehicle_id').to_dict(orient='index')
-        else:
-            print("No vehicles S3 link provided.")
+        try:
+            vehicles_s3_url = s3_links.get('vehicles')
+            if vehicles_s3_url:
+                print(f"Downloading vehicles data from {vehicles_s3_url}")
+                # Parse the S3 URL
+                bucket_name, key = self.parse_s3_url(vehicles_s3_url)
+                # Download the Parquet file
+                self.s3_client.download_file(bucket_name, key, 'vehicles.parquet')
+                # Load the Parquet file into a DataFrame
+                vehicles_df = pd.read_parquet('vehicles.parquet')
+                # Convert DataFrame to dictionary
+                self.vehicles = vehicles_df.set_index('vehicle_id').to_dict(orient='index')
+                print(f"Loaded {len(self.vehicles)} vehicles.")
+            else:
+                print("No vehicles S3 link provided.")
+        except Exception as e:
+            print(f"(AgentModule) Error loading initial state: {e}")
+            self.initialized = False  # Ensure initialized remains False on error
 
     def parse_s3_url(self, s3_url):
         """Parse S3 URL to extract bucket name and key."""
@@ -76,27 +85,30 @@ class AgentModule:
 
     def process_tick(self, tick_data):
         """Update vehicle positions based on the tick event and send updates to SimCore."""
-        batch_updates = []
-        for vehicle_id, vehicle in self.vehicles.items():
-            # Update vehicle position
-            current_position = vehicle['position']
-            speed = vehicle.get('speed', 20)
-            # Simple movement logic
-            new_position = current_position + speed * 0.01  # Adjust as needed
-            vehicle['position'] = new_position
-            # Prepare update message
-            batch_updates.append({
-                'type': 'VehicleMoved',
-                'data': {
-                    'vehicle_id': vehicle_id,
-                    'road': vehicle['road'],
-                    'position_on_road': new_position
-                }
-            })
+        try:
+            batch_updates = []
+            for vehicle_id, vehicle in self.vehicles.items():
+                # Update vehicle position
+                current_position = vehicle.get('position', 0)
+                speed = vehicle.get('speed', 20)
+                # Simple movement logic
+                new_position = current_position + speed * 0.01  # Adjust as needed
+                vehicle['position'] = new_position
+                # Prepare update message
+                batch_updates.append({
+                    'type': 'VehicleMoved',
+                    'data': {
+                        'vehicle_id': vehicle_id,
+                        'road': vehicle.get('road', 'unknown'),
+                        'position_on_road': new_position
+                    }
+                })
 
-        # Send batch updates to SimCoreUpdates queue
-        sqsUtility.send_batch_messages(self.queue_urls['SimCoreUpdates'], batch_updates)
-        print(f"AgentModule sent updates to SimCore for tick {tick_data['tick_number']}")
+            # Send batch updates to SimCoreUpdates queue
+            sqsUtility.send_batch_messages(self.queue_urls['SimCoreUpdates'], batch_updates)
+            print(f"AgentModule sent updates to SimCore for tick {tick_data['tick_number']}")
+        except Exception as e:
+            print(f"(AgentModule) Error processing tick: {e}")
 
 if __name__ == "__main__":
     print("Starting AgentModule...")
