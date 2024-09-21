@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Activate virtual environment if using one (uncomment and adjust if needed)
+# Activate virtual environment if using one
 # source venv/bin/activate
 
 # Navigate to the root directory of the project
@@ -26,11 +26,8 @@ AGENT_PID=$!
 python3 -m traffic_simulation.core.trafficModule &
 TRAFFIC_PID=$!
 
-# Uncomment if you have the visualization module
-# python3 -m traffic_simulation.core.visualizationModule &
-# VISUALIZATION_PID=$!
+python3 -m traffic_simulation.core.visualizationModule &
+VIZ_PID=$!
 
 # Wait for all background processes to finish
-wait $SIMCORE_PID $AGENT_PID $TRAFFIC_PID
-# If visualization module is used, include its PID:
-# wait $SIMCORE_PID $AGENT_PID $TRAFFIC_PID $VISUALIZATION_PID
+wait $SIMCORE_PID $AGENT_PID $TRAFFIC_PID $VIZ_PID
