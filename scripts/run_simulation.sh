@@ -17,14 +17,16 @@ cleanup() {
 trap cleanup SIGINT SIGTERM
 
 # Run the modules in the background and store their PIDs
-python3 -m traffic_simulation.core.simCore &
-SIMCORE_PID=$!
-
 python3 -m traffic_simulation.core.agentModule &
 AGENT_PID=$!
 
 python3 -m traffic_simulation.core.trafficModule &
 TRAFFIC_PID=$!
+
+sleep 2  # let it init
+
+python3 -m traffic_simulation.core.simCore &
+SIMCORE_PID=$!
 
 python3 -m traffic_simulation.core.visualizationModule &
 VIZ_PID=$!
