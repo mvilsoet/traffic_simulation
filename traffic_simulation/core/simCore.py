@@ -151,10 +151,11 @@ class SimCore:
         with open('sim_state.json', 'w') as f:
             json.dump(self.state, f)
 
-    if __name__ == "__main__":
-        print("Starting SimCore...")
 
-        sim_core = SimCore()
+if __name__ == "__main__":
+    print("Starting SimCore...")
 
-        # Start the simulation loop
-        sim_core.run_simulation_loop()
+    sim_core = SimCore()
+
+    # Start the simulation loop
+    sim_core.run_simulation_loop()
