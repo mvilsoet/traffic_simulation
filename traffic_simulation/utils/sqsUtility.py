@@ -101,7 +101,7 @@ def send_batch_messages(queue_url, messages, message_group_id=None):
                 Entries=batch_entries
             )
             responses.append(response)
-            logging.info(f"Batch messages sent to queue {queue_url}: {len(batch_entries)} messages")
+            # logging.info(f"Batch messages sent to queue {queue_url}: {len(batch_entries)} messages")
         except Exception as e:
             logging.error(f"Error sending batch messages to queue {queue_url}: {str(e)}")
             raise
