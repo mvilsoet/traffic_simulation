@@ -4,6 +4,7 @@ import os
 import time
 import json
 import boto3
+import pandas as pd
 from traffic_simulation.utils import sqsUtility
 
 class SimCore:
@@ -18,6 +19,7 @@ class SimCore:
             self.MAX_NUMBER_OF_MESSAGES = CONFIG.get('MAX_NUMBER_OF_MESSAGES', 10)
             self.WAIT_TIME_SECONDS = CONFIG.get('WAIT_TIME_SECONDS', 1)
             self.TICK_INTERVAL = CONFIG.get('TICK_INTERVAL', 1)  # Time between ticks
+            self.S3_LINKS = CONFIG.get('S3_LINKS', {})
 
         # Initialize SQS client
         self.queue_urls = sqsUtility.get_queue_urls(self.QUEUES)
@@ -29,8 +31,6 @@ class SimCore:
         self.tick_number = 0
 
     def load_initial_state(self):
-        # Since the initial state is provided via S3 links and loaded by the modules themselves,
-        # we can initialize our state here as needed.
         state = {
             'intersections': {},
             'roads': {},
@@ -38,7 +38,38 @@ class SimCore:
             'vehicles': {},
             'road_blockages': {}
         }
+
+        # Load initial data from S3
+        s3_client = boto3.client('s3')
+        try:
+            # Load intersections
+            intersections_s3_url = self.S3_LINKS.get('intersections')
+            if intersections_s3_url:
+                bucket_name, key = self.parse_s3_url(intersections_s3_url)
+                s3_client.download_file(bucket_name, key, 'intersections.parquet')
+                intersections_df = pd.read_parquet('intersections.parquet')
+                state['intersections'] = intersections_df.set_index('intersection_id').to_dict(orient='index')
+                print(f"Loaded {len(state['intersections'])} intersections.")
+
+            # Load roads
+            roads_s3_url = self.S3_LINKS.get('roads')
+            if roads_s3_url:
+                bucket_name, key = self.parse_s3_url(roads_s3_url)
+                s3_client.download_file(bucket_name, key, 'roads.parquet')
+                roads_df = pd.read_parquet('roads.parquet')
+                state['roads'] = roads_df.set_index('road_id').to_dict(orient='index')
+                print(f"Loaded {len(state['roads'])} roads.")
+
+        except Exception as e:
+            print(f"Error loading initial state in SimCore: {e}")
+
         return state
+
+    def parse_s3_url(self, s3_url):
+        """Parse S3 URL to extract bucket name and key."""
+        s3_url = s3_url.replace("s3://", "")
+        bucket_name, key = s3_url.split('/', 1)
+        return bucket_name, key
 
     def run_simulation_loop(self):
         while True:
@@ -117,15 +148,13 @@ class SimCore:
 
     def export_state(self):
         """Serialize the simulation state to a JSON file."""
-        if self.tick_number % 5 == 0:
-            with open('sim_state.json', 'w') as f:
-                json.dump(self.state, f)
-            # print("Exported simulation state to sim_state.json")
+        with open('sim_state.json', 'w') as f:
+            json.dump(self.state, f)
 
-if __name__ == "__main__":
-    print("Starting SimCore...")
+    if __name__ == "__main__":
+        print("Starting SimCore...")
 
-    sim_core = SimCore()
+        sim_core = SimCore()
 
-    # Start the simulation loop
-    sim_core.run_simulation_loop()
+        # Start the simulation loop
+        sim_core.run_simulation_loop()
