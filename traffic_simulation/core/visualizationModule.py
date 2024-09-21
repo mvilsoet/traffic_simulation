@@ -170,10 +170,11 @@ def update_graph(n):
             x=vehicle_positions_df['x'],
             y=vehicle_positions_df['y'],
             mode='markers',
-            marker=dict(size=10, color='blue', symbol='car'),
+            marker=dict(size=10, color='blue', symbol='triangle-up'),
             name='Vehicles',
             hovertext=vehicle_positions_df['vehicle_id']
         ))
+
 
     fig.update_layout(
         title='Traffic Simulation Visualization',
