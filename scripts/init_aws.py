@@ -73,7 +73,7 @@ def generate_initial_state():
     s3 = boto3.client('s3')
 
     # Upload files to S3 and delete local copies
-    bucket_name = 'your-bucket-name'  # Replace with your actual bucket name
+    bucket_name = 'trafficsimulation'
     s3_links = {}
     for file_name in dataframes.keys():
         try:
