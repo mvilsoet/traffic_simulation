@@ -35,7 +35,7 @@ class AgentModule:
                 elif event_type == 'SimulationTick' and self.initialized:
                     self.process_tick(event['data'])
                 else:
-                    print(f"Unhandled event type: {event_type}")
+                    print(f"(agentModule) Unhandled event type: {event_type}")
 
                 # Delete the message from the queue
                 sqsUtility.delete_message(self.queue_urls['SimulationEvents'], message['ReceiptHandle'])

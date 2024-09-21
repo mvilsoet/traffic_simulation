@@ -109,7 +109,7 @@ class SimCore:
         elif message_type == 'ROAD_BLOCKAGE':
             self.update_road_blockage_state(data)
         else:
-            print(f"Unhandled message type: {message_type}")
+            print(f"(simCore) Unhandled message type: {message_type}")
 
     def update_vehicle_state(self, data):
         vehicle_id = data['vehicle_id']
