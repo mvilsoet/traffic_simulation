@@ -40,7 +40,6 @@ class TrafficControlModule:
                 self.process_tick(body['data'])
             else:
                 print(f"(trafficModule) Unhandled message type: {message_type}", message)
-                print(message)
 
             # Delete the message after processing
             sqsUtility.delete_message(self.queue_urls['SimulationEvents'], message['ReceiptHandle'])
