@@ -8,7 +8,7 @@ from traffic_simulation.utils import sqsUtility
 class SimCore:
     def __init__(self):
         # Load configuration
-        config_file = os.path.join(os.path.dirname(__file__), '../../config/config.json')
+        config_file = os.path.join(os.path.dirname(__file__), 'config', 'config.json')
         with open(config_file, 'r') as config_file:
             CONFIG = json.load(config_file)
             self.QUEUES = CONFIG['QUEUES']
@@ -18,9 +18,14 @@ class SimCore:
             self.WAIT_TIME_SECONDS = CONFIG.get('WAIT_TIME_SECONDS', 1)
             self.TICK_INTERVAL = CONFIG.get('TICK_INTERVAL', 1)  # Time between ticks
             self.S3_LINKS = CONFIG.get('S3_LINKS', {})
+            self.S3_BUCKET = CONFIG.get('S3_BUCKET', 'your-default-bucket-name')  # Add this line
+            self.SIM_STATE_DUMP = CONFIG.get('SIM_STATE_S3_KEY', 'sim_state.json')  # Add this line
 
         # Initialize SQS client
         self.queue_urls = sqsUtility.get_queue_urls(self.QUEUES)
+
+        # AWS S3 client
+        self.s3_client = boto3.client('s3')
 
         # Initialize the simulation state
         self.state = self.load_initial_state()
@@ -87,8 +92,9 @@ class SimCore:
             # Process updates and update internal state
             self.run_simulation_step()
 
-            # Serialize the state to a JSON file for visualization
-            self.export_state()
+            # Export the state every 10 ticks
+            if self.tick_number % 10 == 0:
+                self.export_state()
 
             # Increment tick number
             self.tick_number += 1
@@ -145,9 +151,32 @@ class SimCore:
         pass
 
     def export_state(self):
-        """Serialize the simulation state to a JSON file."""
-        with open('sim_state.json', 'w') as f:
-            json.dump(self.state, f)
+        """Serialize the simulation state and upload it to S3."""
+        try:
+            # Convert state to JSON string
+            state_json = json.dumps(self.state)
+
+            # Upload to S3
+            self.s3_client.put_object(
+                Bucket=self.S3_BUCKET,
+                Key=self.SIM_STATE_S3_KEY,
+                Body=state_json
+            )
+
+            # Send notification to Visualization Module via SQS
+            sqsUtility.send_message(self.queue_urls[self.SIMCORE_QUEUE], {
+                'type': 'StateExported',
+                'data': {
+                    's3_bucket': self.S3_BUCKET,
+                    's3_key': self.SIM_STATE_DUMP,
+                    'tick_number': self.tick_number
+                }
+            })
+
+            print(f"Exported simulation state to s3://{self.S3_BUCKET}/{self.SIM_STATE_S3_KEY}")
+
+        except Exception as e:
+            print(f"Error exporting simulation state: {e}")
 
 
 if __name__ == "__main__":
