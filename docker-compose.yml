@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  simcore:
+    build:
+      context: .
+      dockerfile: traffic_simulation/simCore.Dockerfile
+    container_name: simcore
+    volumes:
+      - ./config/config.json:/app/config/config.json
+    networks:
+      - simnet
+
+  agentmodule:
+    build:
+      context: .
+      dockerfile: traffic_simulation/agentModule.Dockerfile
+    container_name: agentmodule
+    volumes:
+      - ./config/config.json:/app/config/config.json
+    networks:
+      - simnet
+
+  trafficmodule:
+    build:
+      context: .
+      dockerfile: traffic_simulation/trafficModule.Dockerfile
+    container_name: trafficmodule
+    volumes:
+      - ./config/config.json:/app/config/config.json
+    networks:
+      - simnet
+
+  vizmodule:
+    build:
+      context: .
+      dockerfile: traffic_simulation/vizModule.Dockerfile
+    container_name: vizmodule
+    ports:
+      - "8050:8050"
+    volumes:
+      - ./config/config.json:/app/config/config.json
+    networks:
+      - simnet
+
+networks:
+  simnet:
+    driver: bridge
