@@ -41,8 +41,47 @@ app.layout = html.Div(children=[
     )
 ])
 
+# Helper function to poll SQS and process StateExported messages
+def poll_and_update_state():
+    global latest_state  # Use shared variable for latest state
+
+    try:
+        messages = sqsUtility.receive_messages(
+            simulation_events_queue_url,
+            max_number_of_messages=MAX_NUMBER_OF_MESSAGES,
+            wait_time_seconds=0  # Poll without blocking
+        )
+
+        # Process each message
+        for message in messages:
+            body = json.loads(message['Body'])
+            message_type = body.get('type')
+
+            if message_type == 'StateExported':
+                data = body.get('data', {})
+                s3_bucket = data.get('s3_bucket')
+                s3_key = data.get('s3_key')
+                tick_number = data.get('tick_number')
+
+                # Download the sim_state.json from S3
+                if s3_bucket and s3_key:
+                    try:
+                        response = s3_client.get_object(Bucket=s3_bucket, Key=s3_key)
+                        state_json = response['Body'].read().decode('utf-8')
+                        latest_state = json.loads(state_json)  # Update latest state
+
+                        print(f"Updated state for tick {tick_number}")
+                    except Exception as e:
+                        print(f"Error downloading state from S3: {e}")
+
+            # Delete the message from the queue once it's processed
+            sqsUtility.delete_message(simulation_events_queue_url, message['ReceiptHandle'])
+
+    except Exception as e:
+        print(f"Error receiving messages: {e}")
+
+# Helper function to create road lines
 def create_road_lines(roads_df):
-    """Create line shapes for roads."""
     road_shapes = []
     for _, road in roads_df.iterrows():
         road_shape = {
@@ -55,13 +94,13 @@ def create_road_lines(roads_df):
                 'width': 4,
                 'color': 'gray'
             },
-            'layer': 'below'  # Ensure roads are drawn below data traces
+            'layer': 'below'
         }
         road_shapes.append(road_shape)
     return road_shapes
 
+# Helper function to create road blockages
 def create_road_blockages(roads_df, road_blockages):
-    """Modify road shapes to indicate blockages."""
     blockage_shapes = []
     for road_id, blocked in road_blockages.items():
         if blocked:
@@ -78,13 +117,13 @@ def create_road_blockages(roads_df, road_blockages):
                         'width': 6,
                         'color': 'red'
                     },
-                    'layer': 'below'  # Ensure blockages are drawn below data traces
+                    'layer': 'below'
                 }
                 blockage_shapes.append(blockage_shape)
     return blockage_shapes
 
+# Helper function to create traffic light markers
 def create_traffic_light_markers(intersections_df, traffic_lights):
-    """Create markers for traffic lights."""
     traffic_light_markers = []
     for intersection_id, state in traffic_lights.items():
         intersection = intersections_df.loc[intersections_df['intersection_id'] == intersection_id]
@@ -111,48 +150,16 @@ def create_traffic_light_markers(intersections_df, traffic_lights):
     Input('interval-component', 'n_intervals')
 )
 def update_graph(n):
-    # Use the latest_state shared variable
-    global latest_state
+    # Call the function to poll SQS and update the latest state
+    poll_and_update_state()
 
-    # Poll SQS for new StateExported messages
-    try:
-        messages = sqsUtility.receive_messages(
-            simulation_events_queue_url,
-            max_number_of_messages=MAX_NUMBER_OF_MESSAGES,
-            wait_time_seconds=0  # Set to 0 to avoid blocking
-        )
-        for message in messages:
-            body = json.loads(message['Body'])
-            message_type = body.get('type')
-            if message_type == 'StateExported':
-                # Download the sim_state.json from S3
-                data = body.get('data', {})
-                s3_bucket = data.get('s3_bucket')
-                s3_key = data.get('s3_key')
-                tick_number = data.get('tick_number')
-
-                if s3_bucket and s3_key:
-                    try:
-                        response = s3_client.get_object(Bucket=s3_bucket, Key=s3_key)
-                        state_json = response['Body'].read().decode('utf-8')
-                        latest_state = json.loads(state_json)
-                        print(f"Visualization Module: Updated state for tick {tick_number}")
-                    except Exception as e:
-                        print(f"Visualization Module: Error downloading state from S3: {e}")
-
-            # Delete the message after processing
-            sqsUtility.delete_message(simulation_events_queue_url, message['ReceiptHandle'])
-
-    except Exception as e:
-        print(f"Visualization Module: Error receiving messages: {e}")
-
+    # If no state is available, display a placeholder graph
     if not latest_state:
-        # If the state is not yet available, return an empty figure
         fig = go.Figure()
         fig.update_layout(title='Waiting for simulation data...')
         return fig
 
-    # Extract data from the state
+    # Extract data from the latest state
     state = latest_state
     vehicles = state.get('vehicles', {})
     traffic_lights = state.get('traffic_lights', {})
@@ -163,7 +170,7 @@ def update_graph(n):
     # Prepare the figure
     fig = go.Figure()
 
-    # Convert roads to DataFrame
+    # Convert roads to DataFrame and plot them
     if roads:
         roads_df = pd.DataFrame.from_dict(roads, orient='index').reset_index()
         roads_df.rename(columns={'index': 'road_id'}, inplace=True)
@@ -175,7 +182,6 @@ def update_graph(n):
         # Add road blockages
         if road_blockages:
             blockage_shapes = create_road_blockages(roads_df, road_blockages)
-            # Append blockage shapes to the existing shapes
             fig.update_layout(shapes=fig.layout.shapes + tuple(blockage_shapes))
 
     # Add traffic lights
@@ -186,32 +192,24 @@ def update_graph(n):
         for marker in traffic_light_markers:
             fig.add_trace(marker)
 
-    # Add vehicles
+    # Add vehicle positions
     if vehicles and roads:
         vehicles_df = pd.DataFrame.from_dict(vehicles, orient='index').reset_index()
         vehicles_df.rename(columns={'index': 'vehicle_id'}, inplace=True)
 
-        # Map vehicle positions to x and y coordinates on the roads
         vehicle_positions = []
         for _, vehicle in vehicles_df.iterrows():
             road_id = vehicle['road']
             road = roads_df.loc[roads_df['road_id'] == road_id]
             if not road.empty:
                 road = road.iloc[0]
-                # Ensure 'length' field exists
-                if 'length' in road and road['length'] > 0:
-                    # Calculate vehicle position along the road
-                    t = vehicle['position'] / road['length']
-                else:
-                    t = 0.5  # Default to midpoint if length is not available or invalid
-                t = max(0, min(t, 1))  # Ensure t is between 0 and 1
+                t = vehicle['position'] / road['length'] if 'length' in road and road['length'] > 0 else 0.5
                 x = road['start_x'] + t * (road['end_x'] - road['start_x'])
                 y = road['start_y'] + t * (road['end_y'] - road['start_y'])
                 vehicle_positions.append({'vehicle_id': vehicle['vehicle_id'], 'x': x, 'y': y})
 
         if vehicle_positions:
             vehicle_positions_df = pd.DataFrame(vehicle_positions)
-
             fig.add_trace(go.Scatter(
                 x=vehicle_positions_df['x'],
                 y=vehicle_positions_df['y'],
@@ -221,6 +219,7 @@ def update_graph(n):
                 hovertext=vehicle_positions_df['vehicle_id']
             ))
 
+    # Finalize the layout of the graph
     fig.update_layout(
         title='Traffic Simulation Visualization',
         xaxis_title='X Coordinate',

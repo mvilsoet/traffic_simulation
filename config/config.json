@@ -10,6 +10,8 @@
   "MAX_NUMBER_OF_MESSAGES": 10,
   "WAIT_TIME_SECONDS": 0,
   "TICK_INTERVAL": 1,
+  "S3_BUCKET": "trafficsimulation",
+  "SIM_STATE_S3_KEY": "sim_state.json",
   "S3_LINKS": {
       "vehicles": "s3://trafficsimulation/vehicles.parquet",
       "traffic_lights": "s3://trafficsimulation/traffic_lights.parquet",
