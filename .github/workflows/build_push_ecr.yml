@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        service: [simcore, agentmodule, trafficmodule, vizmodule]
+        service: [simCore, agentModule, trafficModule, vizModule]
 
     steps:
     - uses: actions/checkout@v2
@@ -34,7 +34,7 @@ jobs:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         IMAGE_TAG: ${{ github.sha }}
       run: |
-        docker build -t $ECR_REGISTRY/${{ matrix.service }}:$IMAGE_TAG -f traffic_simulation/${{ matrix.service }}.Dockerfile .
+        docker build -t $ECR_REGISTRY/${{ matrix.service }}:$IMAGE_TAG -f traffic_simulation/utils/${{ matrix.service }}.Dockerfile
         docker push $ECR_REGISTRY/${{ matrix.service }}:$IMAGE_TAG
 
     - name: Update EKS deployment
