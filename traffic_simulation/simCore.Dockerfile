@@ -1,15 +1,17 @@
 FROM python:3.9-slim
 
-# Set the working directory
+# Set the working directory inside the container
 WORKDIR /app
 
 # Copy the requirements file and install dependencies
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the application code
-COPY traffic_simulation/utils /app/utils
-COPY traffic_simulation/core/ /app/
+# Copy the entire traffic_simulation folder into the container
+COPY traffic_simulation /app/traffic_simulation
 
-# Set the entry point
-CMD ["python", "simCore.py"]
+# Set the PYTHONPATH so Python knows where to find the traffic_simulation package
+ENV PYTHONPATH="/app"
+
+# Set the entry point to start the simulation
+CMD ["python", "traffic_simulation/core/simCore.py"]

@@ -1,19 +1,17 @@
 FROM python:3.9-slim
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set the working directory
+# Set the working directory inside the container
 WORKDIR /app
 
 # Copy the requirements file and install dependencies
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the application code
-COPY traffic_simulation/core/ /app/
+# Copy the entire traffic_simulation folder into the container
+COPY traffic_simulation /app/traffic_simulation
 
-# Set the entry point
-CMD ["python", "vizModule.py"]
+# Set the PYTHONPATH so Python knows where to find the traffic_simulation package
+ENV PYTHONPATH="/app"
+
+# Set the entry point to start the simulation
+CMD ["python", "traffic_simulation/core/vizModule.py"]
