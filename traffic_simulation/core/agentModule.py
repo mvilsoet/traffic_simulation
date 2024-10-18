@@ -3,7 +3,7 @@ import os
 import time
 import pandas as pd
 import boto3
-from traffic_simulation.core import sqsUtility
+from traffic_simulation.utils import sqsUtility
 
 class AgentModule:
     def __init__(self):

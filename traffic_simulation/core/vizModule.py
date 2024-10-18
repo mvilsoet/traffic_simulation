@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 import pandas as pd
 import os
 import boto3
-from traffic_simulation.core import sqsUtility
+from traffic_simulation.utils import sqsUtility
 
 # Initialize the Dash app
 app = dash.Dash(__name__)
