@@ -13,7 +13,7 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the application code
-COPY traffic_simulation/core/vizModule.py /app/
+COPY traffic_simulation/core/ /app/
 
 # Set the entry point
 CMD ["python", "vizModule.py"]

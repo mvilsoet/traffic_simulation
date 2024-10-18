@@ -3,7 +3,7 @@ import time
 import json
 import boto3
 import pandas as pd
-from traffic_simulation.utils import sqsUtility
+from traffic_simulation.core import sqsUtility
 
 class SimCore:
     def __init__(self):

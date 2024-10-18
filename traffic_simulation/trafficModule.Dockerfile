@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the application code
 COPY traffic_simulation/utils /app/utils
-COPY traffic_simulation/core/trafficModule.py /app/
+COPY traffic_simulation/core/ /app/
 
 # Set the entry point
 CMD ["python", "trafficModule.py"]
