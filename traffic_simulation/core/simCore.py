@@ -19,7 +19,7 @@ class SimCore:
             self.TICK_INTERVAL = CONFIG.get('TICK_INTERVAL', 1)  # Time between ticks
             self.S3_LINKS = CONFIG.get('S3_LINKS', {})
             self.S3_BUCKET = CONFIG.get('S3_BUCKET', None)  # Add this line
-            self.SIM_STATE_DUMP = CONFIG.get('SIM_STATE_S3_KEY', 'sim_state.json')  # Add this line
+            self.SIM_STATE_S3_KEY = CONFIG.get('SIM_STATE_S3_KEY', 'sim_state.json')  # Add this line
 
         # Initialize SQS client
         self.queue_urls = sqsUtility.get_queue_urls(self.QUEUES)
@@ -168,7 +168,7 @@ class SimCore:
                 'type': 'StateExported',
                 'data': {
                     's3_bucket': self.S3_BUCKET,
-                    's3_key': self.SIM_STATE_DUMP,
+                    's3_key': self.SIM_STATE_S3_KEY,
                     'tick_number': self.tick_number
                 }
             })
