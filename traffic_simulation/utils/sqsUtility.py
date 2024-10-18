@@ -8,7 +8,7 @@ import uuid
 logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Load configuration from config.json
-config_file = os.path.join(os.path.dirname(__file__), '..', 'core', 'config.json')
+config_file = os.path.join(os.path.dirname(__file__), '..', 'core', 'config.json')  # relative path D:
 with open(config_file, 'r') as config_file:
     CONFIG = json.load(config_file)
     AWS_REGION = CONFIG['aws']['region']
