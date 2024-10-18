@@ -14,7 +14,7 @@ This project implements a scalable, event-driven traffic simulation system that 
 
 The system consists of four main modules:
 
-1. **SimCore**: Holds current state of the entire simulation
+1. **SimCore**: Holds current state of the entire simulation.
 2. **AgentModule**: Manages vehicle behaviors
 3. **TrafficModule**: Controls traffic lights and road conditions
 4. **VisualizationModule**: Downloads the simCore state dump and displays live changes
