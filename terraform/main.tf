@@ -2,7 +2,7 @@ provider "aws" {
   region = "us-east-1"
 }
 
-# Create S3 Bucket for storing Parquet files
+# Create S3 Bucket
 resource "aws_s3_bucket" "traffic_simulation_bucket" {
   bucket = "trafficsimulation"
   acl    = "private"
