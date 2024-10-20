@@ -27,7 +27,7 @@ jobs:
         terraform init \
           -backend-config="bucket=mvilsoet-bucket" \
           -backend-config="key=terraform.tfstate" \
-          -backend-config="region=us-east-1"
+          -backend-config="region=us-east-2"
       working-directory: ./terraform
 
     - name: Terraform Validate
