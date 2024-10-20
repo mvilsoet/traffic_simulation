@@ -72,14 +72,13 @@ def generate_initial_state():
     s3 = boto3.client('s3')
 
     # Upload files to S3 and delete local copies
-    bucket_name = 'trafficsimulation'  # Replace with your actual bucket name
+    bucket_name = 'trafficsimulation'
     s3_links = {}
     for file_name in dataframes.keys():
         try:
             s3.upload_file(file_name, bucket_name, file_name)
             os.remove(file_name)
             print(f"Uploaded and deleted local file: {file_name}")
-            # Generate S3 link (assuming appropriate permissions)
             s3_link = f"s3://{bucket_name}/{file_name}"
             s3_links[file_name] = s3_link
             print(f"S3 Link: {s3_link}")
@@ -88,42 +87,9 @@ def generate_initial_state():
 
     print(f"All Parquet files uploaded to S3 bucket '{bucket_name}' and local files deleted.")
 
-    # Optionally, you can save the S3 links to a config file or print them out
     print("S3 Links to Parquet files:")
     print(json.dumps(s3_links, indent=4))
 
-def initialize_sqs_queues():
-    # Load configuration from config.json
-    config_file = os.path.join(os.path.dirname(__file__), '../config/config.json')
-    with open(config_file, 'r') as config_file:
-        CONFIG = json.load(config_file)
-        QUEUES = CONFIG.get('QUEUES', [])
-        AWS_REGION = CONFIG['aws']['region']
-
-    # Initialize SQS client
-    sqs = boto3.client('sqs', region_name=AWS_REGION)
-
-    # Create SQS queues
-    for queue_name in QUEUES:
-        try:
-            if 'fifo' in queue_name.lower():
-                # Create FIFO queue
-                response = sqs.create_queue(
-                    QueueName=queue_name,
-                    Attributes={
-                        'FifoQueue': 'true',
-                        'ContentBasedDeduplication': 'true'
-                    }
-                )
-            else:
-                # Create standard queue
-                response = sqs.create_queue(QueueName=queue_name)
-            print(f"Queue '{queue_name}' created successfully.")
-        except sqs.exceptions.QueueNameExists:
-            print(f"Queue '{queue_name}' already exists.")
-        except Exception as e:
-            print(f"Error creating queue '{queue_name}': {e}")
 
 if __name__ == "__main__":
     generate_initial_state()
-    initialize_sqs_queues()

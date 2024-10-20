@@ -2,11 +2,11 @@
   "aws": {
       "region": "us-east-1"
   },
-  "QUEUES": ["SimulationEvents", "SimCoreUpdates"],
-  "AGENT_MOD_QUEUES": ["SimulationEvents", "SimCoreUpdates"],
-  "TRAFFIC_MOD_QUEUES": ["SimulationEvents", "SimCoreUpdates"],
+  "QUEUES": ["SimulationEvents", "SimCoreUpdates.fifo"],
+  "AGENT_MOD_QUEUES": ["SimulationEvents", "SimCoreUpdates.fifo"],
+  "TRAFFIC_MOD_QUEUES": ["SimulationEvents", "SimCoreUpdates.fifo"],
   "SIMCORE_QUEUE": "SimulationEvents",
-  "SIMCORE_UPDATES_QUEUE": "SimCoreUpdates",
+  "SIMCORE_UPDATES_QUEUE": "SimCoreUpdates.fifo",
   "MAX_NUMBER_OF_MESSAGES": 10,
   "WAIT_TIME_SECONDS": 0,
   "TICK_INTERVAL": 1,

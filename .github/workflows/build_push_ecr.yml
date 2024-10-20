@@ -1,4 +1,4 @@
-name: Init S3 and SQS, then Build and Push to ECR
+name: Deploy Project to EKS
 
 on:
   push:
@@ -7,9 +7,32 @@ on:
 
 env:
   AWS_REGION: us-east-1
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
 jobs:
-  init-aws:
+  provision-aws:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Install Terraform
+      run: |
+        sudo apt-get update && sudo apt-get install -y gnupg software-properties-common curl
+        curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
+        echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+        sudo apt-get update && sudo apt-get install terraform
+
+    - name: Initialize Terraform
+      run: terraform init
+      working-directory: ./terraform
+
+    - name: Provision AWS resources
+      run: terraform apply -auto-approve
+      working-directory: ./terraform
+
+  generate-initial-state:
+    needs: provision-aws
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
@@ -24,20 +47,12 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v1
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
-
-    # - name: Run init_aws.py
-    #   run: python scripts/init_aws.py
+    - name: Generate and Upload Initial State to S3
+      run: python scripts/initial_state.py
 
   build-and-push:
-    needs: init-aws
+    needs: generate-initial-state
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v2
 
@@ -50,13 +65,6 @@ jobs:
         sudo chmod +x /usr/local/bin/docker-compose
         docker-compose --version
 
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v1
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
-
     - name: Login to Amazon ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v1
@@ -67,16 +75,15 @@ jobs:
         IMAGE_TAG: ${{ github.sha }}
       run: |
         docker-compose build
-
         for service in simcore agentmodule trafficmodule vizmodule; do
           docker push $ECR_REGISTRY/${service}:$IMAGE_TAG
         done
 
-    - name: Update EKS deployments
-      run: |
-        aws eks get-token --cluster-name your-cluster-name | kubectl apply -f -
-        for service in simcore agentmodule trafficmodule vizmodule; do
-          kubectl set image deployment/${service} ${service}=$ECR_REGISTRY/${service}:$IMAGE_TAG
-        done
-      env:
-        KUBECONFIG: ${{ secrets.KUBECONFIG }}
+    # - name: Update EKS deployments
+    #   run: |
+    #     aws eks get-token --cluster-name your-cluster-name | kubectl apply -f -
+    #     for service in simcore agentmodule trafficmodule vizmodule; do
+    #       kubectl set image deployment/${service} ${service}=$ECR_REGISTRY/${service}:$IMAGE_TAG
+    #     done
+    #   env:
+    #     KUBECONFIG: ${{ secrets.KUBECONFIG }}
