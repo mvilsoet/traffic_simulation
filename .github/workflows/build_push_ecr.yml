@@ -69,7 +69,6 @@ jobs:
         docker-compose build
 
         for service in simcore agentmodule trafficmodule vizmodule; do
-          docker tag ${service}:latest $ECR_REGISTRY/${service}:$IMAGE_TAG
           docker push $ECR_REGISTRY/${service}:$IMAGE_TAG
         done
 

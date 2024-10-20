@@ -11,6 +11,7 @@ services:
     environment:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+    image: ${ECR_REGISTRY}/simcore:${IMAGE_TAG}
 
   agentmodule:
     build:
@@ -24,6 +25,7 @@ services:
     environment:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+    image: ${ECR_REGISTRY}/agentmodule:${IMAGE_TAG}
 
   trafficmodule:
     build:
@@ -37,6 +39,7 @@ services:
     environment:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+    image: ${ECR_REGISTRY}/trafficmodule:${IMAGE_TAG}
 
   vizmodule:
     build:
@@ -52,6 +55,7 @@ services:
     environment:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+    image: ${ECR_REGISTRY}/vizmodule:${IMAGE_TAG}
 
 networks:
   simnet:
