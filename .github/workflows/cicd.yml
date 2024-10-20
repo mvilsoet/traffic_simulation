@@ -32,7 +32,7 @@ jobs:
 
     - name: Terraform Validate
       id: validate
-      run: terraform validat
+      run: terraform validate
       working-directory: ./terraform
 
     - name: Terraform Plan
