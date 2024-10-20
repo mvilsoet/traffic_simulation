@@ -3,7 +3,13 @@ terraform {
   backend "s3" {
     bucket = "mvilsoet-bucket"
     key    = "terraform.tfstate"
-    region = "us-east-1"
+    region = "us-east-2"
+  }
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 4.0"
+    }
   }
 }
 
@@ -16,7 +22,16 @@ resource "aws_s3_bucket" "traffic_simulation_bucket" {
   bucket = "trafficsimulation"
 }
 
+resource "aws_s3_bucket_ownership_controls" "traffic_simulation_bucket_ownership" {
+  bucket = aws_s3_bucket.traffic_simulation_bucket.id
+  rule {
+    object_ownership = "BucketOwnerPreferred"
+  }
+}
+
 resource "aws_s3_bucket_acl" "traffic_simulation_bucket_acl" {
+  depends_on = [aws_s3_bucket_ownership_controls.traffic_simulation_bucket_ownership]
+
   bucket = aws_s3_bucket.traffic_simulation_bucket.id
   acl    = "private"
 }
