@@ -32,12 +32,12 @@ jobs:
 
     - name: Terraform Validate
       id: validate
-      run: terraform validate -no-color
+      run: terraform validat
       working-directory: ./terraform
 
     - name: Terraform Plan
       id: plan
-      run: terraform plan -no-color
+      run: terraform plan
       continue-on-error: true
       working-directory: ./terraform
 

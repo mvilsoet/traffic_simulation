@@ -17,7 +17,7 @@ provider "aws" {
   region = "us-east-1"
 }
 
-# Create S3 Bucket for traffic simulation data
+# Create S3 Bucket for traffic simulation data, allow ACL
 resource "aws_s3_bucket" "traffic_simulation_bucket" {
   bucket = "trafficsimulation"
 }
