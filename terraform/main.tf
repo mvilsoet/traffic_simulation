@@ -25,8 +25,11 @@ data "aws_vpc" "default" {
 }
 
 # Get the subnets of the default VPC
-data "aws_subnet_ids" "default" {
-  vpc_id = data.aws_vpc.default.id
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
 }
 
 # Get default security group for the VPC
@@ -117,7 +120,7 @@ resource "aws_iam_role_policy_attachment" "ec2_container_registry_read_only" {
 resource "aws_eks_node_group" "eks_node_group" {
   cluster_name    = aws_eks_cluster.eks_cluster.name
   node_group_name = "traffic-simulation-nodes"
-  node_role       = aws_iam_role.eks_node_group_role.arn
+  node_role_arn = aws_iam_role.eks_node_group_role.arn
   subnet_ids      = data.aws_subnet_ids.default.ids
 
   scaling_config {
