@@ -97,6 +97,8 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
+    - uses: actions/checkout@v2
+    
     - name: Configure kubectl
       run: |
         aws eks --region $AWS_REGION update-kubeconfig --name traffic-simulation-cluster
@@ -106,4 +108,4 @@ jobs:
         kubectl apply -f k8s/sc-deployment.yaml
         kubectl apply -f k8s/am-deployment.yaml
         kubectl apply -f k8s/tm-deployment.yaml
-        kubectl apply -f k8s/zm-deployment.yaml
+        kubectl apply -f k8s/vm-deployment.yaml
