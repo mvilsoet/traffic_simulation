@@ -93,11 +93,17 @@ jobs:
           docker push $ECR_REGISTRY/${service}:$IMAGE_TAG
         done
 
-    # - name: Update EKS deployments
-    #   run: |
-    #     aws eks get-token --cluster-name your-cluster-name | kubectl apply -f -
-    #     for service in simcore agentmodule trafficmodule vizmodule; do
-    #       kubectl set image deployment/${service} ${service}=$ECR_REGISTRY/${service}:$IMAGE_TAG
-    #     done
-    #   env:
-    #     KUBECONFIG: ${{ secrets.KUBECONFIG }}
+  deploy-to-eks:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+    - name: Configure kubectl
+      run: |
+        aws eks --region $AWS_REGION update-kubeconfig --name traffic-simulation-cluster
+
+    - name: Deploy to Kubernetes
+      run: |
+        kubectl apply -f k8s/simcore-deployment.yaml
+        kubectl apply -f k8s/agentmodule-deployment.yaml
+        kubectl apply -f k8s/trafficmodule-deployment.yaml
+        kubectl apply -f k8s/vizmodule-deployment.yaml

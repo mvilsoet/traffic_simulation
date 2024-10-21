@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trafficmodule
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trafficmodule
+  template:
+    metadata:
+      labels:
+        app: trafficmodule
+    spec:
+      containers:
+      - name: trafficmodule
+        image: <ECR_REGISTRY>/trafficmodule:${IMAGE_TAG}
+        env:
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: AWS_SECRET_ACCESS_KEY
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trafficmodule-service
+spec:
+  selector:
+    app: trafficmodule
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 5000
