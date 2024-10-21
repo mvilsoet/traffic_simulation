@@ -103,7 +103,7 @@ jobs:
 
     - name: Deploy to Kubernetes
       run: |
-        kubectl apply -f k8s/simcore-deployment.yaml
-        kubectl apply -f k8s/agentmodule-deployment.yaml
-        kubectl apply -f k8s/trafficmodule-deployment.yaml
-        kubectl apply -f k8s/vizmodule-deployment.yaml
+        kubectl apply -f k8s/sc-deployment.yaml
+        kubectl apply -f k8s/am-deployment.yaml
+        kubectl apply -f k8s/tm-deployment.yaml
+        kubectl apply -f k8s/zm-deployment.yaml
