@@ -74,7 +74,7 @@ resource "aws_eks_cluster" "eks_cluster" {
   role_arn = aws_iam_role.eks_role.arn
 
   vpc_config {
-    subnet_ids         = data.aws_subnet_ids.default.ids
+    subnet_ids         = data.aws_subnets.default.ids
     security_group_ids = [data.aws_security_group.default.id]
   }
 
@@ -83,6 +83,7 @@ resource "aws_eks_cluster" "eks_cluster" {
     aws_iam_role_policy_attachment.eks_vpc_resource_controller_policy
   ]
 }
+
 
 # Create an EKS node group role
 resource "aws_iam_role" "eks_node_group_role" {
@@ -120,8 +121,8 @@ resource "aws_iam_role_policy_attachment" "ec2_container_registry_read_only" {
 resource "aws_eks_node_group" "eks_node_group" {
   cluster_name    = aws_eks_cluster.eks_cluster.name
   node_group_name = "traffic-simulation-nodes"
-  node_role_arn = aws_iam_role.eks_node_group_role.arn
-  subnet_ids      = data.aws_subnet_ids.default.ids
+  node_role_arn   = aws_iam_role.eks_node_group_role.arn
+  subnet_ids      = data.aws_subnets.default.ids
 
   scaling_config {
     desired_size = 2
