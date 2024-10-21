@@ -1,9 +1,3 @@
-# Cost estimate
-module "pricing" {
-  source  = "terraform-aws-modules/pricing/aws"
-  version = "2.0.3"
-}
-
 # Terraform backend configuration (storing state in S3)
 terraform {
   backend "s3" {

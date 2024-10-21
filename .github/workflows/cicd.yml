@@ -37,25 +37,8 @@ jobs:
 
     - name: Terraform Plan
       id: plan
-      run: terraform plan -out=tfplan
+      run: terraform plan
       continue-on-error: true
-      working-directory: ./terraform
-
-    - name: Terraform Show
-      id: show
-      run: terraform show -json tfplan > plan.json
-      working-directory: ./terraform
-
-    - name: Calculate Estimated Costs
-      run: |
-        terraform apply -auto-approve
-        terraform output -json > pricing_output.json
-      working-directory: ./terraform
-
-    - name: Display Estimated Costs
-      run: |
-        echo "Estimated costs:"
-        cat pricing_output.json
       working-directory: ./terraform
 
     - name: Provision AWS resources
@@ -115,7 +98,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
-
+    
     - name: Configure kubectl
       run: |
         aws eks --region $AWS_REGION update-kubeconfig --name traffic-simulation-cluster
