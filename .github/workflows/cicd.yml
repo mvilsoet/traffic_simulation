@@ -9,9 +9,7 @@ env:
   AWS_REGION: us-east-1
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  ECR_REGISTRY: ${{ needs.build-and-push.outputs.ecr_registry }}
-  IMAGE_TAG: ${{ github.sha }}
-
+  
 jobs:
   provision-aws:
     runs-on: ubuntu-latest
@@ -85,34 +83,34 @@ jobs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v1
 
-    - name: Build, tag, and push images to Amazon ECR
+    - name: Build and Push Images to Amazon ECR
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         IMAGE_TAG: ${{ github.sha }}
       run: |
+        echo "ECR_REGISTRY=${ECR_REGISTRY}" >> .env
+        echo "IMAGE_TAG=${IMAGE_TAG}" >> .env
         docker-compose build
-        for service in simcore agentmodule trafficmodule vizmodule; do
-          docker push $ECR_REGISTRY/${service}:$IMAGE_TAG
-        done
+        docker-compose push
 
   deploy-to-eks:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-
+    
     - name: Configure kubectl
       run: |
         aws eks --region $AWS_REGION update-kubeconfig --name traffic-simulation-cluster
-
+  
     - name: Replace variables in Kubernetes manifests
       env:
-        ECR_REGISTRY: ${{ needs.build-and-push.outputs.ecr_registry }}
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         IMAGE_TAG: ${{ github.sha }}
       run: |
-        sed -i 's|<ECR_REGISTRY>|'"$ECR_REGISTRY"'|g' k8s/*.yaml
-        sed -i 's|\${IMAGE_TAG}|'"$IMAGE_TAG"'|g' k8s/*.yaml
-
+        sed -i 's|<ECR_REGISTRY>|'${ECR_REGISTRY}'|g' k8s/*.yaml
+        sed -i 's|\${IMAGE_TAG}|'${IMAGE_TAG}'|g' k8s/*.yaml
+  
     - name: Deploy to Kubernetes
       run: |
         kubectl apply -f k8s/
