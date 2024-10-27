@@ -98,19 +98,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Configure kubectl
       run: |
         aws eks --region $AWS_REGION update-kubeconfig --name traffic-simulation-cluster
-  
+
     - name: Replace variables in Kubernetes manifests
       env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        AWS_REGION: ${{ env.AWS_REGION }}
+        ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+        ECR_REGISTRY: "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
         IMAGE_TAG: ${{ github.sha }}
       run: |
-        sed -i 's|<ECR_REGISTRY>|'${ECR_REGISTRY}'|g' k8s/*.yaml
-        sed -i 's|\${IMAGE_TAG}|'${IMAGE_TAG}'|g' k8s/*.yaml
-  
+        sed -i 's|<ECR_REGISTRY>|'"$ECR_REGISTRY"'|g' k8s/*.yaml
+        sed -i 's|\${IMAGE_TAG}|'"$IMAGE_TAG"'|g' k8s/*.yaml
+
     - name: Deploy to Kubernetes
       run: |
         kubectl apply -f k8s/
