@@ -35,7 +35,7 @@ spec:
       volumes:
       - name: config-volume
         configMap:
-          name: vizmodule-config
+          name: config
 ---
 apiVersion: v1
 kind: Service
