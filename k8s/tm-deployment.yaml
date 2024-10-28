@@ -26,6 +26,14 @@ spec:
             secretKeyRef:
               name: aws-credentials
               key: AWS_SECRET_ACCESS_KEY
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/traffic_simulation/core/config.json
+          subPath: config.json
+      volumes:
+      - name: config-volume
+        configMap:
+          name: config
 ---
 apiVersion: v1
 kind: Service
