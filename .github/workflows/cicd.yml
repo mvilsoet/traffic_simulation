@@ -112,6 +112,11 @@ jobs:
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  
+    - name: Create ConfigMap for config.json
+      run: |
+        kubectl delete configmap config --ignore-not-found
+        kubectl create configmap config --from-file=config.json=config/config.json
 
     - name: Replace variables in Kubernetes manifests
       env:
