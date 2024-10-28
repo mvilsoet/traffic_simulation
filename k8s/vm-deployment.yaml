@@ -28,6 +28,14 @@ spec:
               key: AWS_SECRET_ACCESS_KEY
         ports:
         - containerPort: 8050
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/traffic_simulation/core/config.json
+          subPath: config.json
+      volumes:
+      - name: config-volume
+        configMap:
+          name: vizmodule-config
 ---
 apiVersion: v1
 kind: Service
