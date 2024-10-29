@@ -3,12 +3,13 @@
 ## Cloud-Native Architecture
 
 This project implements a scalable, event-driven traffic simulation system that models vehicle movement, traffic light changes, and road conditions in a custom city. Current features are as follows:
-- Dynamic traffic light control
-- Road blockage simulation
-- Vehicle movement that obeys lights and road closures
-- 1 Hz Visualization Dashboard on localhost:8050
-- 2 Event-Driven AWS SQS Queues for messaging between all modules
-- Data persistence using AWS S3 (state dump) and Parquet files (initial state load)
+- Real-time traffic simulation at 1 Hz update rate
+- Dynamic traffic light control system
+- Intelligent vehicle movement with traffic rule compliance
+- Road blockage and condition simulation
+- Live visualization dashboard
+- Event-driven architecture using AWS SQS
+- Persistent state management with AWS S3
 
 ### Modules
 
@@ -31,67 +32,26 @@ These modules communicate asynchronously through AWS SQS queues, allowing for sc
 
 ## Setup
 
-1. Clone the repository
+Testing locally
 
-2. Install required packages:
+1. Install required packages:
    ```
    pip install -r requirements.txt
    ```
 
-3. Configure AWS credentials:
+2. Configure AWS credentials:
    - Set up your AWS credentials in `~/.aws/credentials` or use environment variables.
    - Modify bucket name in init_aws.py to your bucket.
 
-4. Initialize the AWS resources:
+3. The docker-compose.yml file orchestrates the required modules and dependencies. To build and start the services, use:
    ```
-   python scripts/init_aws.py
+   docker-compose up --build
    ```
 
-5. Update the `config/config.json` file with your specific AWS region and S3 bucket names from init_aws.py
-
-## Running the Simulation
-
-To start all modules of the simulation, run:
-
-```
-bash scripts/run_simulation.sh
-```
-
-This script will launch all necessary Python modules in the background.
+4. Update the `config/config.json` file with your specific AWS region and S3 bucket names
 
 ## Visualization
 
-Once the simulation is running, you can view the visualization by opening a web browser and navigating to:
-
-```
-http://localhost:8050
+Once the simulation is running, you can view the visualization from the vizModule in AWS EKS. Locally, visit localhost:8050.
 ```
 
-## Project Structure
-
-```
-traffic_simulation/
-│
-├── traffic_simulation/
-│   ├── __init__.py
-│   ├── core/
-│   │   ├── __init__.py
-│   │   ├── simCore.py
-│   │   ├── agentModule.py
-│   │   ├── trafficModule.py
-│   │   └── visualizationModule.py
-│   ├── utils/
-│   │   ├── __init__.py
-│   │   └── sqsUtility.py
-├── config/
-│   └── config.json
-├── scripts/
-│   ├── init_aws.py
-│   └── run_simulation.sh
-├── README.md
-└── requirements.txt
-```
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
