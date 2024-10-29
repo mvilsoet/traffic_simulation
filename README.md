@@ -2,6 +2,8 @@
 
 ## Cloud-Native Architecture
 
+![Traffic Simulation Dashboard](.github/system_diagram.png)
+
 This project implements a scalable, event-driven traffic simulation system that models vehicle movement, traffic light changes, and road conditions in a custom city. Current features are as follows:
 - Real-time traffic simulation at 1 Hz update rate
 - Dynamic traffic light control system
