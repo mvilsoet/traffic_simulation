@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  AWS_REGION: us-east-1
+  AWS_REGION: us-west-2
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   
@@ -27,7 +27,7 @@ jobs:
         terraform init \
           -backend-config="bucket=mvilsoet-bucket" \
           -backend-config="key=terraform.tfstate" \
-          -backend-config="region=us-east-2"
+          -backend-config="region=us-west-2"
       working-directory: ./terraform
 
     - name: Terraform Validate
